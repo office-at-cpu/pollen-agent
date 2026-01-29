@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { fetchPollenData } from '../services/geminiService';
 import { UIViewModel } from '../types';
 import PollenCharts from './PollenCharts';
@@ -10,11 +10,28 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<UIViewModel | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showKeyPrompt, setShowKeyPrompt] = useState(false);
 
-  const safeText = (val: any): string => {
-    if (typeof val === 'string') return val;
-    if (val && typeof val === 'object' && 'text' in val) return String(val.text);
-    return String(val || '');
+  useEffect(() => {
+    const checkKey = async () => {
+      const aistudio = (window as any).aistudio;
+      if (!process.env.API_KEY && aistudio) {
+        const hasKey = await aistudio.hasSelectedApiKey();
+        if (!hasKey) {
+          setShowKeyPrompt(true);
+        }
+      }
+    };
+    checkKey();
+  }, []);
+
+  const handleOpenKeyPicker = async () => {
+    const aistudio = (window as any).aistudio;
+    if (aistudio) {
+      await aistudio.openSelectKey();
+      setShowKeyPrompt(false);
+      setError(null);
+    }
   };
 
   const handleSearch = async (e?: React.FormEvent) => {
@@ -34,11 +51,18 @@ const App: React.FC = () => {
       setData(result);
     } catch (err: any) {
       console.error("Search Error:", err);
-      // Fallback Fehlermeldung, falls process.env.API_KEY nicht geladen wurde
-      if (err.message?.includes("API_KEY") || err.message?.includes("API Key")) {
-        setError("API-Key Fehler: Bitte stellen Sie sicher, dass die Umgebungsvariable API_KEY in Vercel korrekt gesetzt ist.");
+      const msg = err.message || "";
+      
+      if (msg.includes("API_KEY") || msg.includes("API key") || msg.includes("not found") || msg.includes("403") || msg.includes("401")) {
+        const aistudio = (window as any).aistudio;
+        if (aistudio) {
+          setShowKeyPrompt(true);
+          setError("Die Verbindung konnte nicht hergestellt werden. Bitte autorisieren Sie einen gültigen API-Key.");
+        } else {
+          setError("API-Key Fehler: Es wurde kein gültiger Key in der Umgebung gefunden.");
+        }
       } else {
-        setError(err.message || "Ein technischer Fehler ist aufgetreten.");
+        setError("Ein technischer Fehler ist aufgetreten: " + msg);
       }
     } finally {
       setLoading(false);
@@ -55,16 +79,16 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen pb-12 text-slate-900">
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
+    <div className="min-h-screen pb-12 text-slate-900 bg-slate-50">
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
         <div className="max-w-5xl mx-auto px-4 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-blue-200">
+            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-blue-200">
               P
             </div>
             <div>
-              <h1 className="text-xl font-bold text-slate-800">Polleninformation Dr. Schätz</h1>
-              <p className="text-xs text-slate-500 font-medium italic">Ihre dermatologische Praxis in Österreich</p>
+              <h1 className="text-xl font-bold text-slate-800 tracking-tight">Polleninformation Dr. Schätz</h1>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Dermatologische Praxis Österreich</p>
             </div>
           </div>
           
@@ -74,27 +98,53 @@ const App: React.FC = () => {
               placeholder="PLZ"
               value={plz}
               onChange={(e) => setPlz(e.target.value)}
-              className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-24 text-center text-slate-700 font-medium"
+              className="px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 w-28 text-center text-slate-700 font-bold text-lg"
               maxLength={4}
             />
             <button 
               type="submit"
               disabled={loading}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-semibold transition-all shadow-md shadow-blue-100 disabled:opacity-50"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-xl font-bold transition-all shadow-md shadow-blue-100 disabled:opacity-50 active:scale-95"
             >
-              {loading ? 'Suche...' : 'Prüfen'}
+              {loading ? 'Analyse...' : 'Prüfen'}
             </button>
           </form>
         </div>
       </header>
 
       <main className="max-w-5xl mx-auto px-4 mt-8">
-        {error && (
+        {showKeyPrompt && (
+          <div className="bg-white border-2 border-blue-50 p-8 rounded-3xl mb-8 flex flex-col items-center text-center shadow-xl shadow-blue-50/50 animate-in fade-in zoom-in duration-300">
+            <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center text-3xl mb-4">🔐</div>
+            <h3 className="text-xl font-bold text-slate-800 mb-2">API-Autorisierung erforderlich</h3>
+            <p className="text-slate-500 mb-6 max-w-md text-sm">
+              Für die Live-Recherche ist ein gültiger API-Key erforderlich. Bitte wählen Sie einen Key aus einem Projekt mit aktiver Abrechnung.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button 
+                onClick={handleOpenKeyPicker}
+                className="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200"
+              >
+                Key jetzt auswählen
+              </button>
+              <a 
+                href="https://ai.google.dev/gemini-api/docs/billing" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-xs text-blue-500 flex items-center justify-center font-bold hover:underline"
+              >
+                Infos zur Abrechnung
+              </a>
+            </div>
+          </div>
+        )}
+
+        {error && !showKeyPrompt && (
           <div className="bg-rose-50 border border-rose-100 text-rose-700 p-6 rounded-2xl mb-8 flex items-start gap-4 animate-in slide-in-from-top-2">
-            <span className="text-xl mt-0.5">⚠️</span>
+            <span className="text-xl">⚠️</span>
             <div>
-              <p className="font-bold mb-1">Hinweis</p>
-              <p className="text-sm opacity-90">{safeText(error)}</p>
+              <p className="font-bold mb-1">Hinweis zur Analyse</p>
+              <p className="text-sm opacity-90">{error}</p>
             </div>
           </div>
         )}
@@ -102,50 +152,50 @@ const App: React.FC = () => {
         {loading && (
           <div className="flex flex-col items-center justify-center py-24 space-y-6">
             <div className="relative">
-              <div className="w-16 h-16 border-4 border-blue-100 rounded-full"></div>
-              <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin absolute top-0"></div>
+              <div className="w-20 h-20 border-4 border-blue-100 rounded-full"></div>
+              <div className="w-20 h-20 border-4 border-blue-600 border-t-transparent rounded-full animate-spin absolute top-0"></div>
             </div>
             <div className="text-center">
-              <p className="text-lg font-bold text-slate-700 italic">Dr. Schätz analysiert die aktuelle Lage...</p>
-              <p className="text-sm text-slate-400 mt-1">Bitte haben Sie einen Moment Geduld.</p>
+              <p className="text-xl font-bold text-slate-800 italic">Dr. Schätz führt eine Live-Recherche durch...</p>
+              <p className="text-sm text-slate-400 mt-2">Aktuelle Pollenflug-Daten für Österreich werden analysiert.</p>
             </div>
           </div>
         )}
 
         {data && !loading && (
           <div className="space-y-8 animate-in fade-in duration-700">
-            {/* Header Section */}
+            {/* Header Result */}
             <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-8 flex flex-col md:flex-row justify-between gap-6">
               <div>
-                <span className="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em] mb-2 block">Lagebericht für Österreich</span>
+                <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-2 block">Dermatologisches Bulletin</span>
                 <h2 className="text-2xl font-black text-slate-800 leading-tight">
-                  {safeText(data.header?.subtitle).replace('Standort: ', '')}
+                  {data.header?.subtitle?.replace('Standort: ', '')}
                 </h2>
-                <p className="text-slate-400 text-sm mt-2 flex items-center gap-2">
+                <div className="flex items-center gap-2 mt-3">
                   <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-                  {safeText(data.header?.timestamp_label)}
-                </p>
+                  <p className="text-slate-400 text-xs font-medium uppercase tracking-tighter">{data.header?.timestamp_label}</p>
+                </div>
               </div>
               <div className="flex flex-wrap gap-2">
                 {(data.header?.quality_badges ?? []).map((badge, idx) => (
                   <div key={idx} className={`px-4 py-2 rounded-2xl border flex flex-col justify-center ${getSeverityBadge(badge.severity)}`}>
-                    <span className="text-[9px] uppercase font-black opacity-50 tracking-wider">Status</span>
-                    <span className="text-xs font-bold">{safeText(badge.label)}</span>
+                    <span className="text-[8px] uppercase font-black opacity-50 tracking-widest">Datenstatus</span>
+                    <span className="text-xs font-bold">{badge.label}</span>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* KPI Cards */}
+            {/* KPIs */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {(data.kpi_cards ?? []).map(card => (
-                <div key={card.id} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 hover:border-blue-200 transition-all group">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">{safeText(card.title)}</p>
+                <div key={card.id} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 hover:border-blue-200 transition-all group relative overflow-hidden">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">{card.title}</p>
                   <p className={`text-2xl font-black mb-4 ${
                     card.severity === 'bad' ? 'text-rose-600' : 
                     card.severity === 'warn' ? 'text-amber-600' : 'text-emerald-600'
                   }`}>
-                    {safeText(card.value_label)}
+                    {card.value_label}
                   </p>
                   <div className="w-full h-2 bg-slate-50 rounded-full overflow-hidden">
                     <div 
@@ -156,19 +206,22 @@ const App: React.FC = () => {
                       style={{ width: `${Math.min(100, (card.value_level / 4) * 100)}%` }}
                     />
                   </div>
+                  {card.hint && <p className="text-[10px] text-slate-400 mt-3 font-medium italic">{card.hint}</p>}
                 </div>
               ))}
             </div>
 
             {/* Summaries */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-gradient-to-br from-blue-50 to-white p-8 rounded-3xl border border-blue-100 shadow-sm">
-                <h4 className="text-xs font-black text-blue-800 uppercase mb-4 tracking-widest">Dermatologischer Fokus</h4>
-                <p className="text-lg text-slate-800 font-semibold leading-relaxed">{safeText(data.summaries?.today_one_liner)}</p>
+              <div className="bg-gradient-to-br from-blue-50/50 to-white p-8 rounded-3xl border border-blue-100 shadow-sm relative">
+                <div className="absolute top-0 right-0 p-4 text-blue-200 text-4xl opacity-50 select-none">🩺</div>
+                <h4 className="text-[10px] font-black text-blue-800 uppercase mb-4 tracking-widest">Lagebericht Heute</h4>
+                <p className="text-lg text-slate-800 font-bold leading-relaxed">{data.summaries?.today_one_liner}</p>
               </div>
-              <div className="bg-gradient-to-br from-indigo-50 to-white p-8 rounded-3xl border border-indigo-100 shadow-sm">
-                <h4 className="text-xs font-black text-indigo-800 uppercase mb-4 tracking-widest">Wochenprognose</h4>
-                <p className="text-lg text-slate-800 font-semibold leading-relaxed">{safeText(data.summaries?.next_days_one_liner)}</p>
+              <div className="bg-gradient-to-br from-indigo-50/50 to-white p-8 rounded-3xl border border-indigo-100 shadow-sm relative">
+                <div className="absolute top-0 right-0 p-4 text-indigo-200 text-4xl opacity-50 select-none">📈</div>
+                <h4 className="text-[10px] font-black text-indigo-800 uppercase mb-4 tracking-widest">Prognose</h4>
+                <p className="text-lg text-slate-800 font-bold leading-relaxed">{data.summaries?.next_days_one_liner}</p>
               </div>
             </div>
 
@@ -183,16 +236,16 @@ const App: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {(data.recommendation_blocks ?? []).map(block => (
                 <div key={block.id} className="p-8 rounded-3xl bg-white border border-slate-100 shadow-sm">
-                  <h3 className="text-xl font-black text-slate-800 mb-6">{safeText(block.title)}</h3>
+                  <h3 className="text-xl font-black text-slate-800 mb-6">{block.title}</h3>
                   <div className="space-y-6">
                     {(block.items ?? []).map((item, idx) => (
-                      <div key={idx} className="flex gap-4 items-start">
-                        <div className="w-8 h-8 rounded-2xl bg-slate-50 text-slate-400 flex items-center justify-center shrink-0">
+                      <div key={idx} className="flex gap-4 items-start group">
+                        <div className="w-10 h-10 rounded-2xl bg-slate-50 text-slate-400 flex items-center justify-center shrink-0 group-hover:bg-blue-50 group-hover:text-blue-500 transition-colors">
                           <span className="text-xs font-black">{idx + 1}</span>
                         </div>
                         <div>
-                          <p className="text-slate-800 font-bold leading-tight mb-1">{safeText(item.title)}</p>
-                          <p className="text-sm text-slate-500 leading-relaxed">{safeText(item.detail)}</p>
+                          <p className="text-slate-800 font-bold leading-tight mb-1">{item.title}</p>
+                          <p className="text-sm text-slate-500 leading-relaxed">{item.detail}</p>
                         </div>
                       </div>
                     ))}
@@ -201,48 +254,30 @@ const App: React.FC = () => {
               ))}
             </div>
 
-            {/* Table */}
+            {/* Tables */}
             <div className="space-y-6">
               {(data.tables ?? []).map(table => (
                 <PollenTable key={table.id} tableData={table} />
               ))}
             </div>
 
-            {/* Grounding Sources */}
-            <div className="bg-slate-50 p-8 rounded-3xl border border-slate-200">
-              {data.groundingSources && data.groundingSources.length > 0 && (
-                <div className="mb-6">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Referenzquellen</p>
-                  <div className="flex flex-wrap gap-2">
-                    {data.groundingSources.map((source, i) => (
-                      <a 
-                        key={i} 
-                        href={source.uri} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-[10px] font-bold text-blue-600 bg-white px-3 py-1.5 rounded-xl border border-slate-200 hover:border-blue-300 transition-colors shadow-sm"
-                      >
-                        {source.title.length > 40 ? source.title.substring(0, 40) + '...' : source.title}
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <div className="border-t border-slate-200 pt-6">
-                <p className="text-[10px] text-slate-400 leading-relaxed italic">
-                  <strong>Haftungsausschluss:</strong> {safeText(data.disclaimer || "Diese automatisierte Analyse basiert auf aktuellen Web-Daten und dient der unverbindlichen Information.")}
+            {/* Footer / Disclaimer Only (Sources removed per request) */}
+            <div className="bg-slate-200/50 p-8 rounded-3xl border border-slate-200">
+              <div className="pt-2">
+                <p className="text-[10px] text-slate-500 leading-relaxed font-medium">
+                  <strong>Haftungsausschluss:</strong> {data.disclaimer || "Die Informationen basieren auf einer KI-gestützten Live-Recherche. Bei medizinischen Notfällen oder schweren allergischen Symptomen konsultieren Sie bitte umgehend einen Facharzt."}
                 </p>
               </div>
             </div>
           </div>
         )}
 
-        {!data && !loading && !error && (
+        {!data && !loading && !error && !showKeyPrompt && (
           <div className="text-center py-32 animate-in fade-in slide-in-from-bottom-4 duration-1000">
-            <div className="text-7xl mb-8 filter grayscale opacity-20">🏥</div>
-            <h2 className="text-3xl font-black text-slate-800 mb-4">Pollen-Check starten</h2>
-            <p className="text-slate-500 max-w-sm mx-auto text-lg">
-              Geben Sie eine österreichische PLZ ein, um den dermatologischen Lagebericht abzurufen.
+            <div className="text-7xl mb-8 opacity-20">🏥</div>
+            <h2 className="text-3xl font-black text-slate-800 mb-4 tracking-tight">Lagebericht anfordern</h2>
+            <p className="text-slate-500 max-w-sm mx-auto text-lg font-medium leading-relaxed">
+              Geben Sie eine österreichische PLZ ein, um eine aktuelle Analyse für Ihren Standort zu erhalten.
             </p>
           </div>
         )}
