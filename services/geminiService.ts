@@ -15,6 +15,7 @@ DATEN-VORGABEN:
 1. Recherche via Google Search für aktuelle Pollendaten in Österreich (pollenwarndienst.at, wetter.at etc.).
 2. Skala: 0 (keine) bis 4 (sehr hoch).
 3. KPI: Gesamt, Bäume, Gräser, Kräuter.
+4. Datum: Aktuelles Datum.
 `;
 
 function cleanJsonResponse(text: string): string {
@@ -28,13 +29,14 @@ function cleanJsonResponse(text: string): string {
 }
 
 export async function fetchPollenData(plz: string): Promise<UIViewModel> {
-  // Die Initialisierung muss exakt so erfolgen laut SDK-Richtlinien
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  // MUST create a new GoogleGenAI instance right before making an API call 
+  // to ensure it uses the most up-to-date API key from the environment/bridge.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
   
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Analysiere die aktuelle Pollenbelastung für PLZ ${plz} in Österreich. Liefere das Ergebnis als JSON.`,
+      contents: `Analysiere die aktuelle Pollenbelastung für PLZ ${plz} in Österreich. Liefere das Ergebnis als JSON gemäß Schema.`,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
         tools: [{ googleSearch: {} }],
@@ -196,28 +198,17 @@ export async function fetchPollenData(plz: string): Promise<UIViewModel> {
     });
 
     const resultText = response.text;
-    if (!resultText) throw new Error("Keine Antwort erhalten.");
+    if (!resultText) throw new Error("Leere Antwort vom Modell.");
     
     const cleanedJson = cleanJsonResponse(resultText);
     const parsed = JSON.parse(cleanedJson) as UIViewModel;
     
-    const sources: { title: string; uri: string }[] = [];
-    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-    if (chunks) {
-      chunks.forEach((chunk: any) => {
-        if (chunk.web && chunk.web.uri) {
-          sources.push({
-            title: chunk.web.title || chunk.web.uri,
-            uri: chunk.web.uri
-          });
-        }
-      });
-    }
-    parsed.groundingSources = sources.filter((v, i, a) => a.findIndex(t => t.uri === v.uri) === i);
+    // Explicitly do not return grounding sources per user request
+    parsed.groundingSources = [];
 
     return parsed;
   } catch (error: any) {
-    console.error("Gemini API Error:", error);
+    console.error("fetchPollenData Error:", error);
     throw error;
   }
 }
