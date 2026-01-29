@@ -31,12 +31,10 @@ const App: React.FC = () => {
 
     try {
       const result = await fetchPollenData(plz);
-      if (result && (result as any).error) {
-        setError(safeText((result as any).error.message) || "Standort-Fehler");
-      } else if (result && result.header) {
+      if (result && (result.header || result.kpi_cards)) {
         setData(result);
       } else {
-        throw new Error("Ungültiges Datenformat empfangen.");
+        throw new Error("Das Ergebnis konnte nicht korrekt formatiert werden.");
       }
     } catch (err: any) {
       console.error("Search Handler Error:", err);
@@ -76,28 +74,6 @@ const App: React.FC = () => {
     </div>
   );
 
-  const WeatherInfoSection = () => (
-    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-100 shadow-sm">
-      <h3 className="text-lg font-bold text-blue-900 mb-3 flex items-center gap-2">
-        <span>🌤️</span> Wetter-Einfluss
-      </h3>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-blue-800">
-        <div className="bg-white/50 p-3 rounded-lg">
-          <p className="font-bold mb-1 italic">🌧️ Regen</p>
-          <p className="text-xs leading-snug">Wäscht Pollen aus der Luft. Balken sinken oft zeitversetzt.</p>
-        </div>
-        <div className="bg-white/50 p-3 rounded-lg">
-          <p className="font-bold mb-1 italic">💨 Wind</p>
-          <p className="text-xs leading-snug">Verteilt Pollen über weite Strecken. Sprunghafte Anstiege möglich.</p>
-        </div>
-        <div className="bg-white/50 p-3 rounded-lg">
-          <p className="font-bold mb-1 italic">☀️ Sonne</p>
-          <p className="text-xs leading-snug">Öffnet Blüten. Hohe Werte an sonnigen Vormittagen typisch.</p>
-        </div>
-      </div>
-    </div>
-  );
-
   return (
     <div className="min-h-screen pb-12 text-slate-900">
       <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
@@ -126,7 +102,7 @@ const App: React.FC = () => {
               disabled={loading}
               className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-semibold transition-all shadow-md shadow-blue-100 disabled:opacity-50"
             >
-              {loading ? 'Lädt...' : 'Prüfen'}
+              {loading ? 'Analysiere...' : 'Prüfen'}
             </button>
           </form>
         </div>
@@ -134,9 +110,18 @@ const App: React.FC = () => {
 
       <main className="max-w-5xl mx-auto px-4 mt-8">
         {error && (
-          <div className="bg-rose-50 border border-rose-200 text-rose-700 p-4 rounded-xl mb-8 flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
-            <span className="text-xl">⚠️</span>
-            <p className="font-medium">{safeText(error)}</p>
+          <div className="bg-rose-50 border border-rose-200 text-rose-700 p-6 rounded-xl mb-8 animate-in fade-in slide-in-from-top-4 duration-300">
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-xl">⚠️</span>
+              <p className="font-bold">Hinweis zur Analyse</p>
+            </div>
+            <p className="text-sm opacity-90">{safeText(error)}</p>
+            <button 
+              onClick={() => handleSearch()}
+              className="mt-4 text-xs font-bold uppercase tracking-wider bg-rose-200 hover:bg-rose-300 text-rose-800 px-4 py-2 rounded-lg transition-colors"
+            >
+              Erneut versuchen
+            </button>
           </div>
         )}
 
@@ -153,45 +138,40 @@ const App: React.FC = () => {
         {loading && (
           <div className="flex flex-col items-center justify-center py-20 space-y-4">
             <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-slate-500 font-medium italic">Dr. Schätz analysiert die aktuelle Lage für PLZ {plz}...</p>
-            <p className="text-xs text-slate-400">Dies kann einen Moment dauern (Live-Recherche).</p>
+            <p className="text-slate-500 font-medium italic">Dr. Schätz führt eine Live-Recherche durch...</p>
+            <p className="text-xs text-slate-400">Dies kann bis zu 60 Sekunden dauern.</p>
           </div>
         )}
 
         {data && !loading && (
           <div className="space-y-8 animate-in fade-in duration-500">
             
-            {/* Structured Location & Quality Card */}
+            {/* Header / Standort */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-              <div className="flex flex-col md:flex-row items-stretch">
-                <div className="bg-slate-50 p-6 flex items-center justify-center border-b md:border-b-0 md:border-r border-slate-100">
-                  <div className="text-3xl grayscale opacity-50">📍</div>
+              <div className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div>
+                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Standort & Zeit</h4>
+                  <p className="text-lg font-bold text-slate-800 leading-tight">
+                    {safeText(data.header?.subtitle || `Analyse für PLZ ${plz}`).replace('Standort: ', '')}
+                  </p>
+                  <p className="text-[10px] text-slate-400 mt-1">{safeText(data.header?.timestamp_label)}</p>
                 </div>
-                <div className="p-6 flex-1 flex flex-col md:flex-row md:items-center justify-between gap-6">
-                  <div>
-                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Gewählter Standort</h4>
-                    <p className="text-lg font-bold text-slate-800 leading-tight">
-                      {safeText(data.header?.subtitle).replace('Standort: ', '')}
-                    </p>
-                    <p className="text-[10px] text-slate-400 mt-1">{safeText(data.header?.timestamp_label)}</p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {(data.header?.quality_badges ?? []).map((badge, idx) => (
-                      <div key={idx} className={`px-3 py-2 rounded-xl border flex flex-col ${getSeverityBadge(badge.severity)}`}>
-                        <span className="text-[9px] uppercase font-bold opacity-60 tracking-tighter">Datenqualität</span>
-                        <span className="text-xs font-bold leading-none mt-1">{safeText(badge.label)}</span>
-                      </div>
-                    ))}
-                  </div>
+                <div className="flex flex-wrap gap-2">
+                  {(data.header?.quality_badges ?? []).map((badge, idx) => (
+                    <div key={idx} className={`px-3 py-2 rounded-xl border flex flex-col ${getSeverityBadge(badge.severity)}`}>
+                      <span className="text-[9px] uppercase font-bold opacity-60">Datenquelle</span>
+                      <span className="text-xs font-bold mt-1">{safeText(badge.label)}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
 
-            {/* KPI Section */}
+            {/* KPIs */}
             <div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {(data.kpi_cards ?? []).map(card => (
-                  <div key={card.id} className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center text-center relative overflow-hidden group hover:border-blue-200 transition-colors">
+                  <div key={card.id} className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center text-center group hover:border-blue-200 transition-colors">
                     <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">{safeText(card.title)}</span>
                     <span className={`text-xl font-bold mb-2 ${
                       card.severity === 'bad' ? 'text-rose-600' : 
@@ -199,7 +179,7 @@ const App: React.FC = () => {
                     }`}>
                       {safeText(card.value_label)}
                     </span>
-                    <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden relative">
+                    <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
                       <div 
                         className={`h-full rounded-full transition-all duration-1000 ${
                           card.severity === 'bad' ? 'bg-rose-500' : 
@@ -208,135 +188,84 @@ const App: React.FC = () => {
                         style={{ width: `${Math.min(100, (card.value_level / 4) * 100)}%` }}
                       />
                     </div>
-                    <p className="text-[10px] text-slate-500 mt-3 italic leading-tight">{safeText(card.hint)}</p>
                   </div>
                 ))}
               </div>
               <PollenScaleLegend />
             </div>
 
-            {/* Weather & General Summaries */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2">
-                <WeatherInfoSection />
-              </div>
-              <div className="flex flex-col gap-4">
-                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex-1">
-                  <h4 className="text-xs font-bold text-slate-500 uppercase mb-3 tracking-widest">Wochen-Trend</h4>
-                  <p className="text-sm text-slate-700 leading-relaxed font-medium italic">"{safeText(data.summaries?.midterm_one_liner)}"</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Main Information Blocks */}
+            {/* Zusammenfassungen */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100 shadow-sm">
-                <h4 className="text-xs font-bold text-blue-800 uppercase mb-3 tracking-widest">Die Lage heute</h4>
+              <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100">
+                <h4 className="text-xs font-bold text-blue-800 uppercase mb-3 tracking-widest">Lagebericht Heute</h4>
                 <p className="text-base text-blue-900 font-medium leading-relaxed">{safeText(data.summaries?.today_one_liner)}</p>
               </div>
-              <div className="bg-indigo-50 p-6 rounded-2xl border border-indigo-100 shadow-sm">
-                <h4 className="text-xs font-bold text-indigo-800 uppercase mb-3 tracking-widest">Nächste Tage</h4>
+              <div className="bg-indigo-50 p-6 rounded-2xl border border-indigo-100">
+                <h4 className="text-xs font-bold text-indigo-800 uppercase mb-3 tracking-widest">Prognose</h4>
                 <p className="text-base text-indigo-900 font-medium leading-relaxed">{safeText(data.summaries?.next_days_one_liner)}</p>
               </div>
             </div>
 
-            {/* Charts Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Charts */}
+            <div className="grid grid-cols-1 gap-6">
               {(data.charts ?? []).map(chart => (
                 <PollenCharts key={chart.id} chartData={chart} />
               ))}
             </div>
 
-            {/* Allergiker-Tipps */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Empfehlungen (Nicht fett gemäß Anforderung) */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {(data.recommendation_blocks ?? []).map(block => (
-                <div key={block.id} className={`p-6 rounded-2xl border shadow-sm flex flex-col ${
-                  block.id === 'medical_help' ? 'bg-rose-50 border-rose-100' : 'bg-white border-slate-100'
-                }`}>
-                  <div className="flex justify-between items-start mb-4">
-                    <h3 className={`text-lg font-bold ${
-                      block.id === 'medical_help' ? 'text-rose-800' : 'text-slate-800'
-                    }`}>
-                      {block.id === 'medical_help' ? safeText(block.title) : "Allergiker-Tipp"}
-                    </h3>
-                    {block.id !== 'medical_help' && (
-                      <div className="flex gap-1">
-                        <span className="text-[10px] text-rose-600 font-bold">!!</span>
-                        <span className="text-[10px] text-slate-300">/</span>
-                        <span className="text-[10px] text-amber-500 font-bold">!</span>
-                      </div>
-                    )}
-                  </div>
-                  <ul className="space-y-4 flex-1">
+                <div key={block.id} className="p-6 rounded-2xl bg-white border border-slate-100 shadow-sm">
+                  <h3 className="text-lg font-bold text-slate-800 mb-4">{safeText(block.title)}</h3>
+                  <ul className="space-y-4">
                     {(block.items ?? []).map((item, idx) => (
-                      <li key={idx} className="flex gap-3">
-                        <span className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shadow-sm ${
-                          item.priority === 'hoch' ? 'bg-rose-600 text-white' : 
-                          item.priority === 'mittel' ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-600'
-                        }`}>
-                          {item.priority === 'hoch' ? '!!' : '!'}
-                        </span>
+                      <li key={idx} className="flex gap-3 items-start">
+                        <span className="w-5 h-5 mt-0.5 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-[10px] font-bold">✓</span>
                         <div>
-                          <p className="font-bold text-slate-800 text-sm leading-tight">{safeText(item.title)}</p>
-                          <p className="text-xs text-slate-600 mt-1 leading-relaxed">{safeText(item.detail)}</p>
+                          <p className="text-slate-800 text-sm leading-tight">{safeText(item.title)}</p>
+                          <p className="text-xs text-slate-500 mt-1 leading-relaxed">{safeText(item.detail)}</p>
                         </div>
                       </li>
                     ))}
                   </ul>
-                  {block.id !== 'medical_help' && (
-                    <p className="mt-4 pt-4 border-t border-slate-50 text-[9px] text-slate-400 italic">
-                      Info: !! = Hohe Relevanz heute | ! = Allgemeine Empfehlung
-                    </p>
-                  )}
                 </div>
               ))}
             </div>
 
-            {/* Detailed Tables */}
+            {/* Tabellen */}
             <div className="space-y-6">
               {(data.tables ?? []).map(table => (
                 <PollenTable key={table.id} tableData={table} />
               ))}
             </div>
 
-            {/* Footnotes & Disclaimer */}
-            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 text-slate-500">
-              <p className="text-sm font-bold text-slate-700 mb-2">Wichtige Hinweise:</p>
-              <p className="text-xs leading-relaxed italic mb-4">{safeText(data.disclaimer)}</p>
-              <div className="space-y-1">
-                {(data.footnotes ?? []).map((fn, idx) => (
-                  <p key={idx} className="text-[10px]">* {safeText(fn)}</p>
-                ))}
-              </div>
-              
-              {/* Added Search Grounding Sources as per Gemini API guidelines */}
+            {/* Quellen & Disclaimer */}
+            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
               {data.groundingSources && data.groundingSources.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-slate-200">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Recherchierte Quellen:</p>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1">
-                    {data.groundingSources.map((source, idx) => (
-                      <a 
-                        key={idx} 
-                        href={source.uri} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-[10px] text-blue-500 hover:underline flex items-center gap-1"
+                <div className="mb-6">
+                  <p className="text-xs font-bold text-slate-700 uppercase tracking-widest mb-3">Quellen & Referenzen</p>
+                  <div className="flex flex-wrap gap-x-2 gap-y-2">
+                    {data.groundingSources.map((source, i) => (
+                      <div 
+                        key={i} 
+                        className="text-[10px] text-slate-500 bg-white px-2 py-1 rounded border border-slate-200 shadow-sm select-none"
                       >
-                        <span>🔗</span> {source.title || 'Quelle'}
-                      </a>
+                        {source.title.length > 50 ? source.title.substring(0, 50) + '...' : source.title}
+                      </div>
                     ))}
                   </div>
                 </div>
               )}
+              
+              <p className="text-xs font-bold text-slate-700 mb-1 italic">Haftungsausschluss:</p>
+              <p className="text-[10px] text-slate-500 leading-relaxed italic">
+                {safeText(data.disclaimer || "Die bereitgestellten Informationen dienen der allgemeinen Orientierung und ersetzen keine ärztliche Beratung.")}
+              </p>
             </div>
           </div>
         )}
       </main>
-      
-      <footer className="mt-12 py-8 text-center text-slate-400 text-xs border-t border-slate-100">
-        <p>&copy; {new Date().getFullYear()} Dr. Schätz Dermatologie. Daten dienen der gesundheitlichen Orientierung.</p>
-        <p className="mt-1 uppercase tracking-widest font-bold opacity-50 text-[10px]">Pollenwarn-Agent Österreich</p>
-      </footer>
     </div>
   );
 };
