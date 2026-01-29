@@ -3,88 +3,44 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { UIViewModel } from "../types";
 
 const SYSTEM_INSTRUCTION = `
-Rolle: "Polleninformation-Agent Dr. Schätz" & "UI-Renderer-Agent".
-Kontext: Dermatologische Praxis in Österreich.
-Aufgabe: Recherche aktueller Pollendaten für eine AT-PLZ und Rückgabe eines UI-fertigen JSON-ViewModels.
+Rolle: "Polleninformation-Agent Dr. Schätz" (Dermatologische Praxis Österreich).
+Auftrag: Erstelle ein medizinisches Bulletin zur Pollenlage basierend auf einer PLZ.
+Format: Ausschließlich valides JSON.
 
-WICHTIGE REGELN FÜR DIE DATENSTRUKTUR:
-1. Nutzen Sie Google Search für aktuelle Pollenwerte in Österreich (z.B. pollenwarndienst.at).
-2. Skala: 0 (keine), 1 (gering), 2 (mittel), 3 (hoch), 4 (sehr hoch).
-3. KPI-Karten: Erzeugen Sie IMMER 4 Karten: "Gesamtbelastung", "Bäume", "Gräser", "Kräuter".
-4. Wetter-Einfluss: Gehen Sie in "summaries.midterm_one_liner" explizit auf den Einfluss von Regen, Wind oder Sonne ein.
-5. Inferred-Regel: Falls Einzelarten fehlen, Werte der Gruppe erben und markieren.
+STRIKTES VERBOT VON FORMATIERUNG:
+- KEIN Markdown-Bolding verwenden! Benutze NIEMALS Doppelsternchen (z.B. **Text**) in den JSON-Werten.
+- Die Texte müssen REINER TEXT sein.
+- KEINE Sätze wie "Korrektur:", "Ich wähle...", oder "Hier ist das JSON:".
 
-6. DATUM-FORMAT (STRIKT):
-   Verwenden Sie für ALLE Datumsangaben (timestamp_label, Chart-Achsen, Prognosen) ausschließlich das europäische Format: TT-MM-YYYY (z.B. 24-05-2024).
-
-7. DATENQUELLEN-VERBOT (STRIKT):
-   Nennen Sie im JSON-Output (insbesondere in 'footnotes', 'disclaimer' oder 'summaries') NIEMALS die konkreten Datenquellen, Providernamen oder URLs. Die Information soll wirken, als käme sie direkt aus der Expertise der Praxis.
-
-8. ALLERGIKER-TIPPS (ESSENZIELL):
-   Füllen Sie das Array "recommendation_blocks" IMMER mit mindestens 2 Blöcken:
-   - Block 1 (id: "actions_today"): "Tipps für heute". Enthalten Sie 3-4 konkrete Maßnahmen (z.B. "Haare waschen", "Stoßlüften", "Wäsche trocknen").
-   - Block 2 (id: "medical_help"): "Medizinischer Rat".
-   Verwenden Sie für jedes Item im Feld "priority" strikt: 
-   - "hoch" -> resultiert in "!!" (für kritische Tipps bei hoher Belastung)
-   - "mittel" -> resultiert in "!" (für allgemeine Empfehlungen)
-   - "niedrig" -> für ergänzende Hinweise.
-
-SCHEMA-VORGABE (UI-ViewModel):
-{
-  "ui_version": "1.0",
-  "header": { "title": "Polleninformation", "subtitle": "Standort: {ort} ({plz}), {bundesland}", "timestamp_label": "Aktualisiert: {TT-MM-YYYY HH:MM}", "quality_badges": [] },
-  "kpi_cards": [
-    { "id": "overall", "title": "Gesamtbelastung", "value_label": "...", "value_level": 0-4, "severity": "good|warn|bad", "hint": "..." }
-  ],
-  "charts": [
-    {
-      "id": "overall_3day",
-      "type": "line",
-      "title": "Prognose: Gesamtbelastung (3 Tage)",
-      "x": { "type": "category", "label": "Datum", "values": ["TT-MM-YYYY"] },
-      "series": []
-    }
-  ],
-  "tables": [],
-  "summaries": { "today_one_liner": "...", "next_days_one_liner": "...", "midterm_one_liner": "..." },
-  "recommendation_blocks": [
-    {
-      "id": "actions_today",
-      "title": "Tipps für heute",
-      "items": [
-        { "title": "Titel", "detail": "Beschreibung", "priority": "hoch|mittel|niedrig" }
-      ]
-    }
-  ],
-  "footnotes": [],
-  "disclaimer": "..."
-}
+DATEN-VORGABEN:
+1. Recherche via Google Search für aktuelle Pollendaten in Österreich (pollenwarndienst.at, wetter.at etc.).
+2. Skala: 0 (keine) bis 4 (sehr hoch).
+3. KPI: Gesamt, Bäume, Gräser, Kräuter.
+4. Datum: TT-MM-YYYY.
+5. Tipps: Gib 3-4 konkrete Handlungsanweisungen als kurze Sätze ohne Fettschrift zurück.
 `;
 
 function cleanJsonResponse(text: string): string {
-  let cleaned = text.trim();
-  if (cleaned.startsWith("```")) {
-    cleaned = cleaned.replace(/^```(?:json)?/, "").replace(/```$/, "");
+  if (!text) return "";
+  const startIdx = text.indexOf('{');
+  const endIdx = text.lastIndexOf('}');
+  if (startIdx !== -1 && endIdx !== -1) {
+    return text.substring(startIdx, endIdx + 1);
   }
-  return cleaned.trim();
+  return text.trim();
 }
 
 export async function fetchPollenData(plz: string): Promise<UIViewModel> {
-  // Use named parameter for apiKey as per @google/genai guidelines
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  // Directly await the generateContent call
   const response = await ai.models.generateContent({
     model: "gemini-3-pro-preview",
-    contents: `Postleitzahl: ${plz}. Analysieren Sie die Pollenlage für diesen Standort in Österreich. 
-    WICHTIG: Verwenden Sie für alle Daten das europäische Format TT-MM-YYYY.
-    WICHTIG: Generieren Sie im JSON unbedingt konkrete 'recommendation_blocks' mit Tipps für Allergiker.
-    VERBOTEN: Nennen Sie keine Datenquellen oder URLs in den Textfeldern (footnotes, disclaimer, etc.).`,
+    contents: `Analysiere die aktuelle Pollenbelastung für PLZ ${plz} in Österreich. Liefere das Ergebnis als JSON. WICHTIG: Kein Bolding (**), keine Meta-Kommentare.`,
     config: {
       systemInstruction: SYSTEM_INSTRUCTION,
       tools: [{ googleSearch: {} }],
+      thinkingConfig: { thinkingBudget: 4096 },
       responseMimeType: "application/json",
-      // Recommended: Using responseSchema for expected output structure
       responseSchema: {
         type: Type.OBJECT,
         properties: {
@@ -102,10 +58,12 @@ export async function fetchPollenData(plz: string): Promise<UIViewModel> {
                   properties: {
                     label: { type: Type.STRING },
                     severity: { type: Type.STRING }
-                  }
+                  },
+                  required: ["label", "severity"]
                 }
               }
-            }
+            },
+            required: ["title", "subtitle", "timestamp_label"]
           },
           kpi_cards: {
             type: Type.ARRAY,
@@ -118,7 +76,8 @@ export async function fetchPollenData(plz: string): Promise<UIViewModel> {
                 value_level: { type: Type.NUMBER },
                 severity: { type: Type.STRING },
                 hint: { type: Type.STRING }
-              }
+              },
+              required: ["id", "title", "value_label", "value_level", "severity"]
             }
           },
           summaries: {
@@ -127,40 +86,145 @@ export async function fetchPollenData(plz: string): Promise<UIViewModel> {
               today_one_liner: { type: Type.STRING },
               next_days_one_liner: { type: Type.STRING },
               midterm_one_liner: { type: Type.STRING }
+            },
+            required: ["today_one_liner", "next_days_one_liner", "midterm_one_liner"]
+          },
+          charts: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                id: { type: Type.STRING },
+                type: { type: Type.STRING },
+                title: { type: Type.STRING },
+                x: {
+                  type: Type.OBJECT,
+                  properties: {
+                    type: { type: Type.STRING },
+                    label: { type: Type.STRING },
+                    values: { type: Type.ARRAY, items: { type: Type.STRING } }
+                  },
+                  required: ["type", "label", "values"]
+                },
+                y: {
+                  type: Type.OBJECT,
+                  properties: {
+                    type: { type: Type.STRING },
+                    label: { type: Type.STRING },
+                    min: { type: Type.NUMBER },
+                    max: { type: Type.NUMBER }
+                  },
+                  required: ["type", "label", "min", "max"]
+                },
+                series: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      name: { type: Type.STRING },
+                      values: { type: Type.ARRAY, items: { type: Type.NUMBER } }
+                    },
+                    required: ["name", "values"]
+                  }
+                }
+              },
+              required: ["id", "type", "title", "x", "y", "series"]
+            }
+          },
+          tables: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                id: { type: Type.STRING },
+                title: { type: Type.STRING },
+                columns: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      key: { type: Type.STRING },
+                      label: { type: Type.STRING }
+                    },
+                    required: ["key", "label"]
+                  }
+                },
+                rows: { 
+                  type: Type.ARRAY, 
+                  items: { 
+                    type: Type.OBJECT,
+                    properties: {
+                      pollen_type: { type: Type.STRING },
+                      label: { type: Type.STRING },
+                      inferred: { type: Type.STRING },
+                      category: { type: Type.STRING }
+                    },
+                    required: ["pollen_type", "label"]
+                  } 
+                }
+              },
+              required: ["id", "title", "columns", "rows"]
+            }
+          },
+          recommendation_blocks: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                id: { type: Type.STRING },
+                title: { type: Type.STRING },
+                items: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      title: { type: Type.STRING },
+                      detail: { type: Type.STRING },
+                      priority: { type: Type.STRING }
+                    },
+                    required: ["title", "detail", "priority"]
+                  }
+                }
+              },
+              required: ["id", "title", "items"]
             }
           },
           disclaimer: { type: Type.STRING },
           footnotes: { type: Type.ARRAY, items: { type: Type.STRING } }
-        }
+        },
+        required: ["ui_version", "header", "kpi_cards", "summaries", "recommendation_blocks"]
       }
     },
   });
 
   try {
     const resultText = response.text;
+    if (!resultText) throw new Error("Keine Daten vom Modell empfangen.");
     
-    if (!resultText) {
-      throw new Error("Keine Antwort vom Modell erhalten.");
-    }
-
     const cleanedJson = cleanJsonResponse(resultText);
-    const data = JSON.parse(cleanedJson) as UIViewModel;
+    const parsed = JSON.parse(cleanedJson) as UIViewModel;
     
-    // Extract Search Grounding URLs from groundingChunks as required by Gemini API guidelines
-    const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-    if (groundingChunks) {
-      data.groundingSources = groundingChunks
-        .filter((chunk: any) => chunk.web)
-        .map((chunk: any) => ({
-          title: chunk.web.title || 'Informationsquelle',
-          uri: chunk.web.uri,
-        }))
-        .filter((source: any) => source.uri);
+    // Extrahiere Grounding Quellen (URLs)
+    const sources: { title: string; uri: string }[] = [];
+    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+    if (chunks) {
+      chunks.forEach((chunk: any) => {
+        if (chunk.web && chunk.web.uri) {
+          sources.push({
+            title: chunk.web.title || chunk.web.uri,
+            uri: chunk.web.uri
+          });
+        }
+      });
     }
     
-    return data;
-  } catch (error) {
-    console.error("Gemini API Error or Parse Error:", error);
-    throw new Error("Die Daten konnten nicht geladen werden. Bitte versuchen Sie es in Kürze erneut.");
+    // Dubletten entfernen
+    const uniqueSources = sources.filter((v, i, a) => a.findIndex(t => t.uri === v.uri) === i);
+    parsed.groundingSources = uniqueSources;
+
+    return parsed;
+  } catch (error: any) {
+    console.error("Gemini Process Error:", error);
+    throw new Error(`Fehler bei der Analyse: ${error.message || "Bitte versuchen Sie es erneut."}`);
   }
 }
