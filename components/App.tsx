@@ -1,15 +1,36 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { fetchPollenData } from '../services/geminiService';
 import { UIViewModel } from '../types';
 import PollenCharts from './PollenCharts';
 import PollenTable from './PollenTable';
+
+// Removing conflicting Window.aistudio declaration. 
+// It is assumed to be available as AIStudio type in the global scope.
 
 const App: React.FC = () => {
   const [plz, setPlz] = useState('');
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<UIViewModel | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showKeyPicker, setShowKeyPicker] = useState(false);
+
+  useEffect(() => {
+    // Prüfe ob ein Key vorhanden ist, falls nicht, zeige den Key-Picker Hinweis
+    if (!process.env.API_KEY) {
+      setShowKeyPicker(true);
+    }
+  }, []);
+
+  const handleOpenKeyPicker = async () => {
+    // Access window.aistudio using type assertion to bypass conflict with local re-declarations
+    const aistudio = (window as any).aistudio;
+    if (aistudio) {
+      await aistudio.openSelectKey();
+      setShowKeyPicker(false);
+      setError(null);
+    }
+  };
 
   const safeText = (val: any): string => {
     if (typeof val === 'string') return val;
@@ -20,6 +41,17 @@ const App: React.FC = () => {
 
   const handleSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    
+    // Prüfe erneut auf Key vor dem Call
+    const aistudio = (window as any).aistudio;
+    if (!process.env.API_KEY && aistudio) {
+      const hasKey = await aistudio.hasSelectedApiKey();
+      if (!hasKey) {
+        setShowKeyPicker(true);
+        return;
+      }
+    }
+
     if (!/^\d{4}$/.test(plz)) {
       setError("Bitte geben Sie eine gültige 4-stellige österreichische Postleitzahl ein.");
       return;
@@ -38,6 +70,9 @@ const App: React.FC = () => {
       }
     } catch (err: any) {
       console.error("Search Handler Error:", err);
+      if (err.message?.includes("API Key") || err.message?.includes("key")) {
+        setShowKeyPicker(true);
+      }
       setError(err.message || "Ein unerwarteter Fehler ist aufgetreten.");
     } finally {
       setLoading(false);
@@ -109,7 +144,33 @@ const App: React.FC = () => {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 mt-8">
-        {error && (
+        {showKeyPicker && (
+          <div className="bg-blue-50 border border-blue-200 p-6 rounded-2xl mb-8 flex flex-col items-center text-center animate-in fade-in zoom-in duration-300">
+            <div className="text-3xl mb-3">🔑</div>
+            <h3 className="text-lg font-bold text-blue-900 mb-2">API-Key erforderlich</h3>
+            <p className="text-sm text-blue-700 mb-4 max-w-md">
+              Für die Recherche auf Vercel muss ein API-Key autorisiert werden. Bitte nutzen Sie einen Key aus einem bezahlten Projekt.
+            </p>
+            <div className="flex gap-3">
+              <button 
+                onClick={handleOpenKeyPicker}
+                className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-sm"
+              >
+                Key auswählen
+              </button>
+              <a 
+                href="https://ai.google.dev/gemini-api/docs/billing" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-xs text-blue-600 underline flex items-center"
+              >
+                Infos zur Abrechnung
+              </a>
+            </div>
+          </div>
+        )}
+
+        {error && !showKeyPicker && (
           <div className="bg-rose-50 border border-rose-200 text-rose-700 p-6 rounded-xl mb-8 animate-in fade-in slide-in-from-top-4 duration-300">
             <div className="flex items-center gap-3 mb-2">
               <span className="text-xl">⚠️</span>
@@ -125,7 +186,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {!data && !loading && !error && (
+        {!data && !loading && !error && !showKeyPicker && (
           <div className="text-center py-20">
             <div className="text-6xl mb-6 opacity-30">🌻</div>
             <h2 className="text-2xl font-bold text-slate-800 mb-2">Willkommen beim Pollen-Agent</h2>
@@ -145,7 +206,6 @@ const App: React.FC = () => {
 
         {data && !loading && (
           <div className="space-y-8 animate-in fade-in duration-500">
-            
             {/* Header / Standort */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
               <div className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -213,7 +273,7 @@ const App: React.FC = () => {
               ))}
             </div>
 
-            {/* Empfehlungen (Nicht fett gemäß Anforderung) */}
+            {/* Empfehlungen */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {(data.recommendation_blocks ?? []).map(block => (
                 <div key={block.id} className="p-6 rounded-2xl bg-white border border-slate-100 shadow-sm">
