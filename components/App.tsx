@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { fetchPollenData } from '../services/geminiService';
 import { UIViewModel } from '../types';
 import PollenCharts from './PollenCharts';
@@ -10,41 +10,6 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<UIViewModel | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [showKeyPicker, setShowKeyPicker] = useState(false);
-
-  // Initialer Check auf API Key Verfügbarkeit
-  useEffect(() => {
-    const checkKey = async () => {
-      // Wenn der Key nicht im Prozess ist, prüfen wir die AI Studio Bridge
-      if (!process.env.API_KEY) {
-        const aistudio = (window as any).aistudio;
-        if (aistudio) {
-          const hasKey = await aistudio.hasSelectedApiKey();
-          if (!hasKey) {
-            setShowKeyPicker(true);
-          }
-        } else {
-          // Falls gar keine Bridge da ist und kein Key, müssen wir den Picker zeigen
-          setShowKeyPicker(true);
-        }
-      }
-    };
-    checkKey();
-  }, []);
-
-  const handleOpenKeyPicker = async () => {
-    const aistudio = (window as any).aistudio;
-    if (aistudio) {
-      try {
-        await aistudio.openSelectKey();
-        // Race condition: Wir nehmen an, dass der Key nun da ist
-        setShowKeyPicker(false);
-        setError(null);
-      } catch (e) {
-        console.error("Fehler beim Öffnen des Key-Pickers", e);
-      }
-    }
-  };
 
   const safeText = (val: any): string => {
     if (typeof val === 'string') return val;
@@ -55,7 +20,6 @@ const App: React.FC = () => {
   const handleSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     
-    // Validierung der PLZ
     if (!/^\d{4}$/.test(plz)) {
       setError("Bitte geben Sie eine gültige 4-stellige österreichische Postleitzahl ein.");
       return;
@@ -67,18 +31,12 @@ const App: React.FC = () => {
 
     try {
       const result = await fetchPollenData(plz);
-      if (result && (result.header || result.kpi_cards)) {
-        setData(result);
-      } else {
-        throw new Error("Die Analyse konnte nicht abgeschlossen werden. Bitte versuchen Sie es erneut.");
-      }
+      setData(result);
     } catch (err: any) {
       console.error("Search Error:", err);
-      
-      // Spezielles Handling für Key-Fehler (Requested entity was not found)
-      if (err.message?.includes("not found") || err.message?.includes("API key")) {
-        setShowKeyPicker(true);
-        setError("Der API-Key wurde nicht akzeptiert. Bitte wählen Sie einen gültigen Key aus einem bezahlten Projekt.");
+      // Fallback Fehlermeldung, falls process.env.API_KEY nicht geladen wurde
+      if (err.message?.includes("API_KEY") || err.message?.includes("API Key")) {
+        setError("API-Key Fehler: Bitte stellen Sie sicher, dass die Umgebungsvariable API_KEY in Vercel korrekt gesetzt ist.");
       } else {
         setError(err.message || "Ein technischer Fehler ist aufgetreten.");
       }
@@ -121,7 +79,7 @@ const App: React.FC = () => {
             />
             <button 
               type="submit"
-              disabled={loading || showKeyPicker}
+              disabled={loading}
               className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-semibold transition-all shadow-md shadow-blue-100 disabled:opacity-50"
             >
               {loading ? 'Suche...' : 'Prüfen'}
@@ -131,37 +89,11 @@ const App: React.FC = () => {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 mt-8">
-        {showKeyPicker && (
-          <div className="bg-white border-2 border-blue-100 p-8 rounded-3xl mb-8 flex flex-col items-center text-center shadow-xl shadow-blue-50 animate-in fade-in zoom-in duration-500">
-            <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center text-3xl mb-4">🔑</div>
-            <h3 className="text-xl font-bold text-slate-800 mb-2">Sichere Verbindung erforderlich</h3>
-            <p className="text-slate-500 mb-6 max-w-md">
-              Um Live-Polleninformationen für Österreich abrufen zu können, muss ein gültiger API-Key autorisiert werden.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 items-center">
-              <button 
-                onClick={handleOpenKeyPicker}
-                className="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 active:scale-95"
-              >
-                Key jetzt auswählen
-              </button>
-              <a 
-                href="https://ai.google.dev/gemini-api/docs/billing" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-sm text-blue-600 hover:text-blue-800 font-medium underline decoration-blue-200 underline-offset-4"
-              >
-                Hinweis zur Abrechnung
-              </a>
-            </div>
-          </div>
-        )}
-
         {error && (
           <div className="bg-rose-50 border border-rose-100 text-rose-700 p-6 rounded-2xl mb-8 flex items-start gap-4 animate-in slide-in-from-top-2">
             <span className="text-xl mt-0.5">⚠️</span>
             <div>
-              <p className="font-bold mb-1">Analyse unterbrochen</p>
+              <p className="font-bold mb-1">Hinweis</p>
               <p className="text-sm opacity-90">{safeText(error)}</p>
             </div>
           </div>
@@ -174,8 +106,8 @@ const App: React.FC = () => {
               <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin absolute top-0"></div>
             </div>
             <div className="text-center">
-              <p className="text-lg font-bold text-slate-700 italic">Dr. Schätz recherchiert für Sie...</p>
-              <p className="text-sm text-slate-400 mt-1">Aktuelle Pollenflug-Daten werden analysiert.</p>
+              <p className="text-lg font-bold text-slate-700 italic">Dr. Schätz analysiert die aktuelle Lage...</p>
+              <p className="text-sm text-slate-400 mt-1">Bitte haben Sie einen Moment Geduld.</p>
             </div>
           </div>
         )}
@@ -185,7 +117,7 @@ const App: React.FC = () => {
             {/* Header Section */}
             <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-8 flex flex-col md:flex-row justify-between gap-6">
               <div>
-                <span className="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em] mb-2 block">Aktueller Lagebericht</span>
+                <span className="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em] mb-2 block">Lagebericht für Österreich</span>
                 <h2 className="text-2xl font-black text-slate-800 leading-tight">
                   {safeText(data.header?.subtitle).replace('Standort: ', '')}
                 </h2>
@@ -230,12 +162,12 @@ const App: React.FC = () => {
 
             {/* Summaries */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-gradient-to-br from-blue-50 to-white p-8 rounded-3xl border border-blue-100">
-                <h4 className="text-xs font-black text-blue-800 uppercase mb-4 tracking-widest">Dermatologische Einschätzung</h4>
+              <div className="bg-gradient-to-br from-blue-50 to-white p-8 rounded-3xl border border-blue-100 shadow-sm">
+                <h4 className="text-xs font-black text-blue-800 uppercase mb-4 tracking-widest">Dermatologischer Fokus</h4>
                 <p className="text-lg text-slate-800 font-semibold leading-relaxed">{safeText(data.summaries?.today_one_liner)}</p>
               </div>
-              <div className="bg-gradient-to-br from-indigo-50 to-white p-8 rounded-3xl border border-indigo-100">
-                <h4 className="text-xs font-black text-indigo-800 uppercase mb-4 tracking-widest">Trendprognose</h4>
+              <div className="bg-gradient-to-br from-indigo-50 to-white p-8 rounded-3xl border border-indigo-100 shadow-sm">
+                <h4 className="text-xs font-black text-indigo-800 uppercase mb-4 tracking-widest">Wochenprognose</h4>
                 <p className="text-lg text-slate-800 font-semibold leading-relaxed">{safeText(data.summaries?.next_days_one_liner)}</p>
               </div>
             </div>
@@ -276,39 +208,41 @@ const App: React.FC = () => {
               ))}
             </div>
 
-            {/* Footnotes & Disclaimer */}
+            {/* Grounding Sources */}
             <div className="bg-slate-50 p-8 rounded-3xl border border-slate-200">
               {data.groundingSources && data.groundingSources.length > 0 && (
-                <div className="mb-8">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Referenzquellen (Recherchebericht)</p>
+                <div className="mb-6">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Referenzquellen</p>
                   <div className="flex flex-wrap gap-2">
                     {data.groundingSources.map((source, i) => (
-                      <span 
+                      <a 
                         key={i} 
-                        className="text-[10px] font-bold text-slate-500 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm"
+                        href={source.uri} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-[10px] font-bold text-blue-600 bg-white px-3 py-1.5 rounded-xl border border-slate-200 hover:border-blue-300 transition-colors shadow-sm"
                       >
                         {source.title.length > 40 ? source.title.substring(0, 40) + '...' : source.title}
-                      </span>
+                      </a>
                     ))}
                   </div>
                 </div>
               )}
-              
               <div className="border-t border-slate-200 pt-6">
                 <p className="text-[10px] text-slate-400 leading-relaxed italic">
-                  <strong>Hinweis:</strong> {safeText(data.disclaimer || "Diese automatisierte Analyse basiert auf aktuellen Web-Daten und dient der unverbindlichen Information. Bei starken allergischen Reaktionen konsultieren Sie bitte umgehend einen Facharzt.")}
+                  <strong>Haftungsausschluss:</strong> {safeText(data.disclaimer || "Diese automatisierte Analyse basiert auf aktuellen Web-Daten und dient der unverbindlichen Information.")}
                 </p>
               </div>
             </div>
           </div>
         )}
 
-        {!data && !loading && !error && !showKeyPicker && (
+        {!data && !loading && !error && (
           <div className="text-center py-32 animate-in fade-in slide-in-from-bottom-4 duration-1000">
             <div className="text-7xl mb-8 filter grayscale opacity-20">🏥</div>
-            <h2 className="text-3xl font-black text-slate-800 mb-4">Bereit für die Analyse</h2>
+            <h2 className="text-3xl font-black text-slate-800 mb-4">Pollen-Check starten</h2>
             <p className="text-slate-500 max-w-sm mx-auto text-lg">
-              Geben Sie eine österreichische PLZ ein, um den dermatologischen Lagebericht zu starten.
+              Geben Sie eine österreichische PLZ ein, um den dermatologischen Lagebericht abzurufen.
             </p>
           </div>
         )}
