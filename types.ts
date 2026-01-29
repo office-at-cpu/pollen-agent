@@ -49,5 +49,8 @@ export interface UIViewModel {
     items: { title: string; detail: string; priority: 'hoch' | 'mittel' | 'niedrig' }[];
   }[];
   footnotes: string[];
+  // Added missing disclaimer field and grounding sources field for Search Grounding URLs
+  disclaimer?: string;
+  groundingSources?: { title: string; uri: string }[];
   error?: ErrorResponse;
 }
