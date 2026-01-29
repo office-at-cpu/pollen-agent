@@ -10,14 +10,11 @@ Format: Ausschließlich valides JSON.
 STRIKTES VERBOT VON FORMATIERUNG:
 - KEIN Markdown-Bolding verwenden! Benutze NIEMALS Doppelsternchen (z.B. **Text**) in den JSON-Werten.
 - Die Texte müssen REINER TEXT sein.
-- KEINE Sätze wie "Korrektur:", "Ich wähle...", oder "Hier ist das JSON:".
 
 DATEN-VORGABEN:
 1. Recherche via Google Search für aktuelle Pollendaten in Österreich (pollenwarndienst.at, wetter.at etc.).
 2. Skala: 0 (keine) bis 4 (sehr hoch).
 3. KPI: Gesamt, Bäume, Gräser, Kräuter.
-4. Datum: TT-MM-YYYY.
-5. Tipps: Gib 3-4 konkrete Handlungsanweisungen als kurze Sätze ohne Fettschrift zurück.
 `;
 
 function cleanJsonResponse(text: string): string {
@@ -31,13 +28,13 @@ function cleanJsonResponse(text: string): string {
 }
 
 export async function fetchPollenData(plz: string): Promise<UIViewModel> {
-  // WICHTIG: Erstelle die Instanz erst hier, damit der via Bridge ausgewählte Key genutzt wird.
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
+  // Die Initialisierung muss exakt so erfolgen laut SDK-Richtlinien
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Analysiere die aktuelle Pollenbelastung für PLZ ${plz} in Österreich. Liefere das Ergebnis als JSON. WICHTIG: Kein Bolding (**), keine Meta-Kommentare.`,
+      contents: `Analysiere die aktuelle Pollenbelastung für PLZ ${plz} in Österreich. Liefere das Ergebnis als JSON.`,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
         tools: [{ googleSearch: {} }],
@@ -199,7 +196,7 @@ export async function fetchPollenData(plz: string): Promise<UIViewModel> {
     });
 
     const resultText = response.text;
-    if (!resultText) throw new Error("Das Modell lieferte eine leere Antwort.");
+    if (!resultText) throw new Error("Keine Antwort erhalten.");
     
     const cleanedJson = cleanJsonResponse(resultText);
     const parsed = JSON.parse(cleanedJson) as UIViewModel;
@@ -216,15 +213,11 @@ export async function fetchPollenData(plz: string): Promise<UIViewModel> {
         }
       });
     }
-    
-    const uniqueSources = sources.filter((v, i, a) => a.findIndex(t => t.uri === v.uri) === i);
-    parsed.groundingSources = uniqueSources;
+    parsed.groundingSources = sources.filter((v, i, a) => a.findIndex(t => t.uri === v.uri) === i);
 
     return parsed;
   } catch (error: any) {
-    if (error.message?.includes("entity was not found")) {
-      throw new Error("API-Konfigurationsfehler: Bitte wählen Sie einen gültigen Key aus einem bezahlten Projekt.");
-    }
+    console.error("Gemini API Error:", error);
     throw error;
   }
 }
