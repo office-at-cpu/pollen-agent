@@ -1,5 +1,5 @@
 
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { UIViewModel } from "../types";
 
 const SYSTEM_INSTRUCTION = `
@@ -70,9 +70,11 @@ function cleanJsonResponse(text: string): string {
 }
 
 export async function fetchPollenData(plz: string): Promise<UIViewModel> {
+  // Use named parameter for apiKey as per @google/genai guidelines
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  const model = ai.models.generateContent({
+  // Directly await the generateContent call
+  const response = await ai.models.generateContent({
     model: "gemini-3-pro-preview",
     contents: `Postleitzahl: ${plz}. Analysieren Sie die Pollenlage für diesen Standort in Österreich. 
     WICHTIG: Verwenden Sie für alle Daten das europäische Format TT-MM-YYYY.
@@ -81,12 +83,60 @@ export async function fetchPollenData(plz: string): Promise<UIViewModel> {
     config: {
       systemInstruction: SYSTEM_INSTRUCTION,
       tools: [{ googleSearch: {} }],
-      responseMimeType: "application/json"
+      responseMimeType: "application/json",
+      // Recommended: Using responseSchema for expected output structure
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          ui_version: { type: Type.STRING },
+          header: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING },
+              subtitle: { type: Type.STRING },
+              timestamp_label: { type: Type.STRING },
+              quality_badges: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    label: { type: Type.STRING },
+                    severity: { type: Type.STRING }
+                  }
+                }
+              }
+            }
+          },
+          kpi_cards: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                id: { type: Type.STRING },
+                title: { type: Type.STRING },
+                value_label: { type: Type.STRING },
+                value_level: { type: Type.NUMBER },
+                severity: { type: Type.STRING },
+                hint: { type: Type.STRING }
+              }
+            }
+          },
+          summaries: {
+            type: Type.OBJECT,
+            properties: {
+              today_one_liner: { type: Type.STRING },
+              next_days_one_liner: { type: Type.STRING },
+              midterm_one_liner: { type: Type.STRING }
+            }
+          },
+          disclaimer: { type: Type.STRING },
+          footnotes: { type: Type.ARRAY, items: { type: Type.STRING } }
+        }
+      }
     },
   });
 
   try {
-    const response = await model;
     const resultText = response.text;
     
     if (!resultText) {
@@ -94,9 +144,21 @@ export async function fetchPollenData(plz: string): Promise<UIViewModel> {
     }
 
     const cleanedJson = cleanJsonResponse(resultText);
-    const data = JSON.parse(cleanedJson);
+    const data = JSON.parse(cleanedJson) as UIViewModel;
     
-    return data as UIViewModel;
+    // Extract Search Grounding URLs from groundingChunks as required by Gemini API guidelines
+    const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+    if (groundingChunks) {
+      data.groundingSources = groundingChunks
+        .filter((chunk: any) => chunk.web)
+        .map((chunk: any) => ({
+          title: chunk.web.title || 'Informationsquelle',
+          uri: chunk.web.uri,
+        }))
+        .filter((source: any) => source.uri);
+    }
+    
+    return data;
   } catch (error) {
     console.error("Gemini API Error or Parse Error:", error);
     throw new Error("Die Daten konnten nicht geladen werden. Bitte versuchen Sie es in Kürze erneut.");
