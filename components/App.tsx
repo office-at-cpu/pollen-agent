@@ -1,9 +1,9 @@
 
 import React, { useState } from 'react';
-import { fetchPollenData } from './services/geminiService';
-import { UIViewModel } from './types';
-import PollenCharts from './components/PollenCharts';
-import PollenTable from './components/PollenTable';
+import { fetchPollenData } from '../services/geminiService';
+import { UIViewModel } from '../types';
+import PollenCharts from './PollenCharts';
+import PollenTable from './PollenTable';
 
 const App: React.FC = () => {
   const [plz, setPlz] = useState('');
@@ -308,6 +308,26 @@ const App: React.FC = () => {
                   <p key={idx} className="text-[10px]">* {safeText(fn)}</p>
                 ))}
               </div>
+              
+              {/* Added Search Grounding Sources as per Gemini API guidelines */}
+              {data.groundingSources && data.groundingSources.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-slate-200">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Recherchierte Quellen:</p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1">
+                    {data.groundingSources.map((source, idx) => (
+                      <a 
+                        key={idx} 
+                        href={source.uri} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-[10px] text-blue-500 hover:underline flex items-center gap-1"
+                      >
+                        <span>🔗</span> {source.title || 'Quelle'}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
