@@ -31,180 +31,179 @@ function cleanJsonResponse(text: string): string {
 }
 
 export async function fetchPollenData(plz: string): Promise<UIViewModel> {
+  // Always use a new instance with process.env.API_KEY directly as per guidelines.
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  const response = await ai.models.generateContent({
-    model: "gemini-3-pro-preview",
-    contents: `Analysiere die aktuelle Pollenbelastung für PLZ ${plz} in Österreich. Liefere das Ergebnis als JSON. WICHTIG: Kein Bolding (**), keine Meta-Kommentare.`,
-    config: {
-      systemInstruction: SYSTEM_INSTRUCTION,
-      tools: [{ googleSearch: {} }],
-      thinkingConfig: { thinkingBudget: 4096 },
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          ui_version: { type: Type.STRING },
-          header: {
-            type: Type.OBJECT,
-            properties: {
-              title: { type: Type.STRING },
-              subtitle: { type: Type.STRING },
-              timestamp_label: { type: Type.STRING },
-              quality_badges: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    label: { type: Type.STRING },
-                    severity: { type: Type.STRING }
-                  },
-                  required: ["label", "severity"]
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `Analysiere die aktuelle Pollenbelastung für PLZ ${plz} in Österreich. Liefere das Ergebnis als JSON. WICHTIG: Kein Bolding (**), keine Meta-Kommentare.`,
+      config: {
+        systemInstruction: SYSTEM_INSTRUCTION,
+        tools: [{ googleSearch: {} }],
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            ui_version: { type: Type.STRING },
+            header: {
+              type: Type.OBJECT,
+              properties: {
+                title: { type: Type.STRING },
+                subtitle: { type: Type.STRING },
+                timestamp_label: { type: Type.STRING },
+                quality_badges: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      label: { type: Type.STRING },
+                      severity: { type: Type.STRING }
+                    },
+                    required: ["label", "severity"]
+                  }
                 }
+              },
+              required: ["title", "subtitle", "timestamp_label"]
+            },
+            kpi_cards: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  id: { type: Type.STRING },
+                  title: { type: Type.STRING },
+                  value_label: { type: Type.STRING },
+                  value_level: { type: Type.NUMBER },
+                  severity: { type: Type.STRING },
+                  hint: { type: Type.STRING }
+                },
+                required: ["id", "title", "value_label", "value_level", "severity"]
               }
             },
-            required: ["title", "subtitle", "timestamp_label"]
-          },
-          kpi_cards: {
-            type: Type.ARRAY,
-            items: {
+            summaries: {
               type: Type.OBJECT,
               properties: {
-                id: { type: Type.STRING },
-                title: { type: Type.STRING },
-                value_label: { type: Type.STRING },
-                value_level: { type: Type.NUMBER },
-                severity: { type: Type.STRING },
-                hint: { type: Type.STRING }
+                today_one_liner: { type: Type.STRING },
+                next_days_one_liner: { type: Type.STRING },
+                midterm_one_liner: { type: Type.STRING }
               },
-              required: ["id", "title", "value_label", "value_level", "severity"]
-            }
-          },
-          summaries: {
-            type: Type.OBJECT,
-            properties: {
-              today_one_liner: { type: Type.STRING },
-              next_days_one_liner: { type: Type.STRING },
-              midterm_one_liner: { type: Type.STRING }
+              required: ["today_one_liner", "next_days_one_liner", "midterm_one_liner"]
             },
-            required: ["today_one_liner", "next_days_one_liner", "midterm_one_liner"]
-          },
-          charts: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                id: { type: Type.STRING },
-                type: { type: Type.STRING },
-                title: { type: Type.STRING },
-                x: {
-                  type: Type.OBJECT,
-                  properties: {
-                    type: { type: Type.STRING },
-                    label: { type: Type.STRING },
-                    values: { type: Type.ARRAY, items: { type: Type.STRING } }
-                  },
-                  required: ["type", "label", "values"]
-                },
-                y: {
-                  type: Type.OBJECT,
-                  properties: {
-                    type: { type: Type.STRING },
-                    label: { type: Type.STRING },
-                    min: { type: Type.NUMBER },
-                    max: { type: Type.NUMBER }
-                  },
-                  required: ["type", "label", "min", "max"]
-                },
-                series: {
-                  type: Type.ARRAY,
-                  items: {
+            charts: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  id: { type: Type.STRING },
+                  type: { type: Type.STRING },
+                  title: { type: Type.STRING },
+                  x: {
                     type: Type.OBJECT,
                     properties: {
-                      name: { type: Type.STRING },
-                      values: { type: Type.ARRAY, items: { type: Type.NUMBER } }
-                    },
-                    required: ["name", "values"]
-                  }
-                }
-              },
-              required: ["id", "type", "title", "x", "y", "series"]
-            }
-          },
-          tables: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                id: { type: Type.STRING },
-                title: { type: Type.STRING },
-                columns: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      key: { type: Type.STRING },
-                      label: { type: Type.STRING }
-                    },
-                    required: ["key", "label"]
-                  }
-                },
-                rows: { 
-                  type: Type.ARRAY, 
-                  items: { 
-                    type: Type.OBJECT,
-                    properties: {
-                      pollen_type: { type: Type.STRING },
+                      type: { type: Type.STRING },
                       label: { type: Type.STRING },
-                      inferred: { type: Type.STRING },
-                      category: { type: Type.STRING }
+                      values: { type: Type.ARRAY, items: { type: Type.STRING } }
                     },
-                    required: ["pollen_type", "label"]
-                  } 
-                }
-              },
-              required: ["id", "title", "columns", "rows"]
-            }
-          },
-          recommendation_blocks: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                id: { type: Type.STRING },
-                title: { type: Type.STRING },
-                items: {
-                  type: Type.ARRAY,
-                  items: {
+                    required: ["type", "label", "values"]
+                  },
+                  y: {
                     type: Type.OBJECT,
                     properties: {
-                      title: { type: Type.STRING },
-                      detail: { type: Type.STRING },
-                      priority: { type: Type.STRING }
+                      type: { type: Type.STRING },
+                      label: { type: Type.STRING },
+                      min: { type: Type.NUMBER },
+                      max: { type: Type.NUMBER }
                     },
-                    required: ["title", "detail", "priority"]
+                    required: ["type", "label", "min", "max"]
+                  },
+                  series: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        name: { type: Type.STRING },
+                        values: { type: Type.ARRAY, items: { type: Type.NUMBER } }
+                      },
+                      required: ["name", "values"]
+                    }
                   }
-                }
-              },
-              required: ["id", "title", "items"]
-            }
+                },
+                required: ["id", "type", "title", "x", "y", "series"]
+              }
+            },
+            tables: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  id: { type: Type.STRING },
+                  title: { type: Type.STRING },
+                  columns: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        key: { type: Type.STRING },
+                        label: { type: Type.STRING }
+                      },
+                      required: ["key", "label"]
+                    }
+                  },
+                  rows: { 
+                    type: Type.ARRAY, 
+                    items: { 
+                      type: Type.OBJECT,
+                      properties: {
+                        pollen_type: { type: Type.STRING },
+                        label: { type: Type.STRING },
+                        inferred: { type: Type.STRING },
+                        category: { type: Type.STRING }
+                      },
+                      required: ["pollen_type", "label"]
+                    } 
+                  }
+                },
+                required: ["id", "title", "columns", "rows"]
+              }
+            },
+            recommendation_blocks: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  id: { type: Type.STRING },
+                  title: { type: Type.STRING },
+                  items: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        title: { type: Type.STRING },
+                        detail: { type: Type.STRING },
+                        priority: { type: Type.STRING }
+                      },
+                      required: ["title", "detail", "priority"]
+                    }
+                  }
+                },
+                required: ["id", "title", "items"]
+              }
+            },
+            disclaimer: { type: Type.STRING },
+            footnotes: { type: Type.ARRAY, items: { type: Type.STRING } }
           },
-          disclaimer: { type: Type.STRING },
-          footnotes: { type: Type.ARRAY, items: { type: Type.STRING } }
-        },
-        required: ["ui_version", "header", "kpi_cards", "summaries", "recommendation_blocks"]
-      }
-    },
-  });
+          required: ["ui_version", "header", "kpi_cards", "summaries", "recommendation_blocks"]
+        }
+      },
+    });
 
-  try {
     const resultText = response.text;
     if (!resultText) throw new Error("Keine Daten vom Modell empfangen.");
     
     const cleanedJson = cleanJsonResponse(resultText);
     const parsed = JSON.parse(cleanedJson) as UIViewModel;
     
-    // Extrahiere Grounding Quellen (URLs)
     const sources: { title: string; uri: string }[] = [];
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
     if (chunks) {
@@ -218,13 +217,14 @@ export async function fetchPollenData(plz: string): Promise<UIViewModel> {
       });
     }
     
-    // Dubletten entfernen
     const uniqueSources = sources.filter((v, i, a) => a.findIndex(t => t.uri === v.uri) === i);
     parsed.groundingSources = uniqueSources;
 
     return parsed;
   } catch (error: any) {
-    console.error("Gemini Process Error:", error);
-    throw new Error(`Fehler bei der Analyse: ${error.message || "Bitte versuchen Sie es erneut."}`);
+    if (error.message?.includes("entity was not found")) {
+      throw new Error("Key-Fehler: Bitte wählen Sie einen gültigen API-Key aus einem bezahlten Projekt.");
+    }
+    throw error;
   }
 }
