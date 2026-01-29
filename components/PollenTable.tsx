@@ -1,166 +1,111 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
-import { UIViewModel } from "../types";
+import React, { useState } from 'react';
+import { UIViewModel } from '../types';
 
-const SYSTEM_INSTRUCTION = `
-Rolle: "Polleninformation-Agent Dr. Schätz" & "UI-Renderer-Agent".
-Kontext: Dermatologische Praxis in Österreich.
-Aufgabe: Recherche aktueller Pollendaten für eine AT-PLZ und Rückgabe eines UI-fertigen JSON-ViewModels.
-
-WICHTIGE REGELN FÜR DIE DATENSTRUKTUR:
-1. Nutzen Sie Google Search für aktuelle Pollenwerte in Österreich (z.B. pollenwarndienst.at).
-2. Skala: 0 (keine), 1 (gering), 2 (mittel), 3 (hoch), 4 (sehr hoch).
-3. KPI-Karten: Erzeugen Sie IMMER 4 Karten: "Gesamtbelastung", "Bäume", "Gräser", "Kräuter".
-4. Wetter-Einfluss: Gehen Sie in "summaries.midterm_one_liner" explizit auf den Einfluss von Regen, Wind oder Sonne ein.
-5. Inferred-Regel: Falls Einzelarten fehlen, Werte der Gruppe erben und markieren.
-
-6. DATUM-FORMAT (STRIKT):
-   Verwenden Sie für ALLE Datumsangaben (timestamp_label, Chart-Achsen, Prognosen) ausschließlich das europäische Format: TT-MM-YYYY (z.B. 24-05-2024).
-
-7. DATENQUELLEN-VERBOT (STRIKT):
-   Nennen Sie im JSON-Output (insbesondere in 'footnotes', 'disclaimer' oder 'summaries') NIEMALS die konkreten Datenquellen, Providernamen oder URLs. Die Information soll wirken, als käme sie direkt aus der Expertise der Praxis.
-
-8. ALLERGIKER-TIPPS (ESSENZIELL):
-   Füllen Sie das Array "recommendation_blocks" IMMER mit mindestens 2 Blöcken:
-   - Block 1 (id: "actions_today"): "Tipps für heute". Enthalten Sie 3-4 konkrete Maßnahmen (z.B. "Haare waschen", "Stoßlüften", "Wäsche trocknen").
-   - Block 2 (id: "medical_help"): "Medizinischer Rat".
-   Verwenden Sie für jedes Item im Feld "priority" strikt: 
-   - "hoch" -> resultiert in "!!" (für kritische Tipps bei hoher Belastung)
-   - "mittel" -> resultiert in "!" (für allgemeine Empfehlungen)
-   - "niedrig" -> für ergänzende Hinweise.
-
-SCHEMA-VORGABE (UI-ViewModel):
-{
-  "ui_version": "1.0",
-  "header": { "title": "Polleninformation", "subtitle": "Standort: {ort} ({plz}), {bundesland}", "timestamp_label": "Aktualisiert: {TT-MM-YYYY HH:MM}", "quality_badges": [] },
-  "kpi_cards": [
-    { "id": "overall", "title": "Gesamtbelastung", "value_label": "...", "value_level": 0-4, "severity": "good|warn|bad", "hint": "..." }
-  ],
-  "charts": [
-    {
-      "id": "overall_3day",
-      "type": "line",
-      "title": "Prognose: Gesamtbelastung (3 Tage)",
-      "x": { "type": "category", "label": "Datum", "values": ["TT-MM-YYYY"] },
-      "series": []
-    }
-  ],
-  "tables": [],
-  "summaries": { "today_one_liner": "...", "next_days_one_liner": "...", "midterm_one_liner": "..." },
-  "recommendation_blocks": [
-    {
-      "id": "actions_today",
-      "title": "Tipps für heute",
-      "items": [
-        { "title": "Titel", "detail": "Beschreibung", "priority": "hoch|mittel|niedrig" }
-      ]
-    }
-  ],
-  "footnotes": [],
-  "disclaimer": "..."
+interface PollenTableProps {
+  tableData: UIViewModel['tables'][0];
 }
-`;
 
-function cleanJsonResponse(text: string): string {
-  let cleaned = text.trim();
-  if (cleaned.startsWith("```")) {
-    cleaned = cleaned.replace(/^```(?:json)?/, "").replace(/```$/, "");
+const PollenTable: React.FC<PollenTableProps> = ({ tableData }) => {
+  const [collapsed, setCollapsed] = useState<string[]>(tableData.default_collapsed_categories || []);
+
+  const toggleCategory = (cat: string) => {
+    setCollapsed(prev => 
+      prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
+    );
+  };
+
+  const getSeverityColor = (label: string) => {
+    switch (label?.toLowerCase()) {
+      case 'keine': return 'bg-emerald-100 text-emerald-700';
+      case 'gering': return 'bg-green-100 text-green-700';
+      case 'mittel': return 'bg-amber-100 text-amber-700';
+      case 'hoch': return 'bg-orange-100 text-orange-700';
+      case 'sehr hoch': return 'bg-red-100 text-red-700';
+      default: return 'bg-slate-100 text-slate-700';
+    }
+  };
+
+  const columns = tableData.columns ?? [];
+  const rows = tableData.rows ?? [];
+  const notes = tableData.notes ?? [];
+
+  const renderRow = (row: any, idx: number) => (
+    <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+      {columns.map(col => (
+        <td key={col.key} className="py-3 px-4 text-sm text-slate-600">
+          {col.key === 'label' ? (
+            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getSeverityColor(row[col.key])}`}>
+              {row[col.key]}
+            </span>
+          ) : col.key === 'inferred' ? (
+            <span className={`text-xs ${row[col.key] === 'ja' ? 'text-amber-600 italic' : 'text-slate-400'}`}>
+              {row[col.key]}
+            </span>
+          ) : (
+            row[col.key]
+          )}
+        </td>
+      ))}
+    </tr>
+  );
+
+  const groupedRows: Record<string, any[]> = {};
+  if (tableData.group_by) {
+    rows.forEach(row => {
+      const cat = row[tableData.group_by!] || 'Andere';
+      if (!groupedRows[cat]) groupedRows[cat] = [];
+      groupedRows[cat].push(row);
+    });
   }
-  return cleaned.trim();
-}
 
-export async function fetchPollenData(plz: string): Promise<UIViewModel> {
-  // Use named parameter for apiKey as per @google/genai guidelines
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  
-  // Directly await the generateContent call
-  const response = await ai.models.generateContent({
-    model: "gemini-3-pro-preview",
-    contents: `Postleitzahl: ${plz}. Analysieren Sie die Pollenlage für diesen Standort in Österreich. 
-    WICHTIG: Verwenden Sie für alle Daten das europäische Format TT-MM-YYYY.
-    WICHTIG: Generieren Sie im JSON unbedingt konkrete 'recommendation_blocks' mit Tipps für Allergiker.
-    VERBOTEN: Nennen Sie keine Datenquellen oder URLs in den Textfeldern (footnotes, disclaimer, etc.).`,
-    config: {
-      systemInstruction: SYSTEM_INSTRUCTION,
-      tools: [{ googleSearch: {} }],
-      responseMimeType: "application/json",
-      // Recommended: Using responseSchema for expected output structure
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          ui_version: { type: Type.STRING },
-          header: {
-            type: Type.OBJECT,
-            properties: {
-              title: { type: Type.STRING },
-              subtitle: { type: Type.STRING },
-              timestamp_label: { type: Type.STRING },
-              quality_badges: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    label: { type: Type.STRING },
-                    severity: { type: Type.STRING }
-                  }
-                }
-              }
-            }
-          },
-          kpi_cards: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                id: { type: Type.STRING },
-                title: { type: Type.STRING },
-                value_label: { type: Type.STRING },
-                value_level: { type: Type.NUMBER },
-                severity: { type: Type.STRING },
-                hint: { type: Type.STRING }
-              }
-            }
-          },
-          summaries: {
-            type: Type.OBJECT,
-            properties: {
-              today_one_liner: { type: Type.STRING },
-              next_days_one_liner: { type: Type.STRING },
-              midterm_one_liner: { type: Type.STRING }
-            }
-          },
-          disclaimer: { type: Type.STRING },
-          footnotes: { type: Type.ARRAY, items: { type: Type.STRING } }
-        }
-      }
-    },
-  });
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+      <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+        <h3 className="font-semibold text-slate-800">{tableData.title}</h3>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-slate-50/30">
+              {columns.map(col => (
+                <th key={col.key} className="py-3 px-4 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  {col.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {tableData.group_by ? (
+              Object.keys(groupedRows).map(cat => (
+                <React.Fragment key={cat}>
+                  <tr 
+                    className="bg-slate-100/50 cursor-pointer select-none"
+                    onClick={() => toggleCategory(cat)}
+                  >
+                    <td colSpan={columns.length} className="py-2 px-4 text-sm font-bold text-slate-700 flex items-center gap-2">
+                      <span className={`transform transition-transform ${collapsed.includes(cat) ? '-rotate-90' : ''}`}>▼</span>
+                      {cat} ({groupedRows[cat].length})
+                    </td>
+                  </tr>
+                  {!collapsed.includes(cat) && groupedRows[cat].map((row, idx) => renderRow(row, idx))}
+                </React.Fragment>
+              ))
+            ) : (
+              rows.map((row, idx) => renderRow(row, idx))
+            )}
+          </tbody>
+        </table>
+      </div>
+      {notes.length > 0 && (
+        <div className="p-4 bg-slate-50/30 border-t border-slate-100">
+          {notes.map((note, i) => (
+            <p key={i} className="text-xs text-slate-500">* {note}</p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
-  try {
-    const resultText = response.text;
-    
-    if (!resultText) {
-      throw new Error("Keine Antwort vom Modell erhalten.");
-    }
-
-    const cleanedJson = cleanJsonResponse(resultText);
-    const data = JSON.parse(cleanedJson) as UIViewModel;
-    
-    // Extract Search Grounding URLs from groundingChunks as required by Gemini API guidelines
-    const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-    if (groundingChunks) {
-      data.groundingSources = groundingChunks
-        .filter((chunk: any) => chunk.web)
-        .map((chunk: any) => ({
-          title: chunk.web.title || 'Informationsquelle',
-          uri: chunk.web.uri,
-        }))
-        .filter((source: any) => source.uri);
-    }
-    
-    return data;
-  } catch (error) {
-    console.error("Gemini API Error or Parse Error:", error);
-    throw new Error("Die Daten konnten nicht geladen werden. Bitte versuchen Sie es in Kürze erneut.");
-  }
-}
+export default PollenTable;
