@@ -31,8 +31,8 @@ function cleanJsonResponse(text: string): string {
 }
 
 export async function fetchPollenData(plz: string): Promise<UIViewModel> {
-  // Always use a new instance with process.env.API_KEY directly as per guidelines.
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  // WICHTIG: Erstelle die Instanz erst hier, damit der via Bridge ausgewählte Key genutzt wird.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
   
   try {
     const response = await ai.models.generateContent({
@@ -199,7 +199,7 @@ export async function fetchPollenData(plz: string): Promise<UIViewModel> {
     });
 
     const resultText = response.text;
-    if (!resultText) throw new Error("Keine Daten vom Modell empfangen.");
+    if (!resultText) throw new Error("Das Modell lieferte eine leere Antwort.");
     
     const cleanedJson = cleanJsonResponse(resultText);
     const parsed = JSON.parse(cleanedJson) as UIViewModel;
@@ -223,7 +223,7 @@ export async function fetchPollenData(plz: string): Promise<UIViewModel> {
     return parsed;
   } catch (error: any) {
     if (error.message?.includes("entity was not found")) {
-      throw new Error("Key-Fehler: Bitte wählen Sie einen gültigen API-Key aus einem bezahlten Projekt.");
+      throw new Error("API-Konfigurationsfehler: Bitte wählen Sie einen gültigen Key aus einem bezahlten Projekt.");
     }
     throw error;
   }
