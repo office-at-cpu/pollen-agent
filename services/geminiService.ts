@@ -2,6 +2,13 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { UIViewModel } from "../types";
 
+// Deklaration für den TS-Compiler, damit process.env erkannt wird
+declare var process: {
+  env: {
+    API_KEY?: string;
+  };
+};
+
 const SYSTEM_INSTRUCTION = `
 Rolle: "Polleninformation-Agent Dr. Schätz" (Dermatologische Praxis Österreich).
 Auftrag: Erstelle ein medizinisches Bulletin zur Pollenlage basierend auf einer PLZ und optionalen Koordinaten.
