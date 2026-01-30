@@ -28,9 +28,12 @@ function cleanJsonResponse(text: string): string {
 }
 
 export async function fetchPollenData(plz: string, coords?: { lat: number; lng: number }): Promise<UIViewModel> {
-  // Wir erstellen die Instanz erst hier, um den aktuellsten Key aus process.env zu ziehen
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
-  
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    throw new Error("API_KEY_MISSING");
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
   const locationContext = coords ? ` (Koordinaten: ${coords.lat}, ${coords.lng})` : "";
   
   try {
@@ -198,7 +201,7 @@ export async function fetchPollenData(plz: string, coords?: { lat: number; lng: 
     });
 
     const resultText = response.text;
-    if (!resultText) throw new Error("Modell hat keine Daten geliefert.");
+    if (!resultText) throw new Error("Keine Daten vom KI-Modell erhalten.");
     
     const cleanedJson = cleanJsonResponse(resultText);
     const parsed = JSON.parse(cleanedJson) as UIViewModel;
@@ -220,8 +223,7 @@ export async function fetchPollenData(plz: string, coords?: { lat: number; lng: 
     return parsed;
   } catch (error: any) {
     console.error("Gemini API Error:", error);
-    // Wenn der Fehler auf einen ungültigen Key hinweist, werfen wir eine spezifische Nachricht
-    if (error.message?.includes("API_KEY") || error.status === 403 || error.status === 401) {
+    if (error.status === 403 || error.status === 401) {
       throw new Error("API_KEY_MISSING");
     }
     throw error;
