@@ -29,8 +29,8 @@ function cleanJsonResponse(text: string): string {
 }
 
 export async function fetchPollenData(plz: string): Promise<UIViewModel> {
-  // MUST create a new GoogleGenAI instance right before making an API call 
-  // to ensure it uses the most up-to-date API key from the environment/bridge.
+  // Initialisierung strikt nach Vorgabe. 
+  // API_KEY muss in der Umgebung (Vercel Settings) definiert sein.
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
   
   try {
@@ -203,7 +203,7 @@ export async function fetchPollenData(plz: string): Promise<UIViewModel> {
     const cleanedJson = cleanJsonResponse(resultText);
     const parsed = JSON.parse(cleanedJson) as UIViewModel;
     
-    // Explicitly do not return grounding sources per user request
+    // Quellen werden wie gewünscht nicht zurückgegeben
     parsed.groundingSources = [];
 
     return parsed;
