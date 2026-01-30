@@ -4,7 +4,7 @@ import { UIViewModel } from "../types";
 
 const SYSTEM_INSTRUCTION = `
 Rolle: "Polleninformation-Agent Dr. Schätz" (Dermatologische Praxis Österreich).
-Auftrag: Erstelle ein medizinisches Bulletin zur Pollenlage basierend auf einer PLZ.
+Auftrag: Erstelle ein medizinisches Bulletin zur Pollenlage basierend auf einer PLZ und optionalen Koordinaten.
 Format: Ausschließlich valides JSON.
 
 STRIKTES VERBOT VON FORMATIERUNG:
@@ -15,7 +15,6 @@ DATEN-VORGABEN:
 1. Recherche via Google Search für aktuelle Pollendaten in Österreich (pollenwarndienst.at, wetter.at etc.).
 2. Skala: 0 (keine) bis 4 (sehr hoch).
 3. KPI: Gesamt, Bäume, Gräser, Kräuter.
-4. Datum: Aktuelles Datum.
 `;
 
 function cleanJsonResponse(text: string): string {
@@ -28,15 +27,16 @@ function cleanJsonResponse(text: string): string {
   return text.trim();
 }
 
-export async function fetchPollenData(plz: string): Promise<UIViewModel> {
-  // Initialisierung strikt nach Vorgabe. 
-  // API_KEY muss in der Umgebung (Vercel Settings) definiert sein.
+export async function fetchPollenData(plz: string, coords?: { lat: number; lng: number }): Promise<UIViewModel> {
+  // Der API_KEY wird hier direkt aus der Umgebung geladen.
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+  
+  const locationContext = coords ? ` (Koordinaten: ${coords.lat}, ${coords.lng})` : "";
   
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Analysiere die aktuelle Pollenbelastung für PLZ ${plz} in Österreich. Liefere das Ergebnis als JSON gemäß Schema.`,
+      contents: `Analysiere die aktuelle Pollenbelastung für PLZ ${plz} in Österreich${locationContext}. Liefere das Ergebnis als JSON.`,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
         tools: [{ googleSearch: {} }],
@@ -198,17 +198,30 @@ export async function fetchPollenData(plz: string): Promise<UIViewModel> {
     });
 
     const resultText = response.text;
-    if (!resultText) throw new Error("Leere Antwort vom Modell.");
+    if (!resultText) throw new Error("Modell hat keine Daten geliefert.");
     
     const cleanedJson = cleanJsonResponse(resultText);
     const parsed = JSON.parse(cleanedJson) as UIViewModel;
     
-    // Quellen werden wie gewünscht nicht zurückgegeben
-    parsed.groundingSources = [];
+    // Wir extrahieren die Quellen, zeigen sie aber nur als Text (keine Hyperlinks)
+    const sources: { title: string; uri: string }[] = [];
+    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+    if (chunks) {
+      chunks.forEach((chunk: any) => {
+        if (chunk.web && chunk.web.uri) {
+          sources.push({
+            title: chunk.web.title || chunk.web.uri,
+            uri: chunk.web.uri
+          });
+        }
+      });
+    }
+    // Verdoppelte Quellen filtern
+    parsed.groundingSources = sources.filter((v, i, a) => a.findIndex(t => t.uri === v.uri) === i);
 
     return parsed;
   } catch (error: any) {
-    console.error("fetchPollenData Error:", error);
+    console.error("Gemini API Error:", error);
     throw error;
   }
 }
