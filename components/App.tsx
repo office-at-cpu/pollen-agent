@@ -11,6 +11,17 @@ const App: React.FC = () => {
   const [data, setData] = useState<UIViewModel | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const getCoords = (): Promise<{ lat: number; lng: number } | undefined> => {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) return resolve(undefined);
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => resolve(undefined),
+        { timeout: 5000 }
+      );
+    });
+  };
+
   const handleSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     
@@ -24,16 +35,16 @@ const App: React.FC = () => {
     setData(null);
 
     try {
-      const result = await fetchPollenData(plz);
+      const coords = await getCoords();
+      const result = await fetchPollenData(plz, coords);
       setData(result);
     } catch (err: any) {
       console.error("Search Error:", err);
-      const msg = err.message || "";
-      
-      if (msg.includes("401") || msg.includes("403") || msg.includes("API key")) {
-        setError("API-Key Fehler: Bitte prüfen Sie die Environment Variables (API_KEY) in Ihrem Vercel-Dashboard.");
+      // Detaillierte Fehlermeldung für den User
+      if (!process.env.API_KEY) {
+        setError("Konfigurationsfehler: Der API-Key ist im Browser nicht verfügbar. Bitte stellen Sie sicher, dass Sie die App über die vorgesehene Plattform starten.");
       } else {
-        setError("Ein technischer Fehler ist aufgetreten: " + msg);
+        setError(err.message || "Ein technischer Fehler ist aufgetreten.");
       }
     } finally {
       setLoading(false);
@@ -77,7 +88,7 @@ const App: React.FC = () => {
               disabled={loading}
               className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-xl font-bold transition-all shadow-md shadow-blue-100 disabled:opacity-50 active:scale-95"
             >
-              {loading ? 'Lade...' : 'Prüfen'}
+              {loading ? 'Suche...' : 'Prüfen'}
             </button>
           </form>
         </div>
@@ -101,8 +112,8 @@ const App: React.FC = () => {
               <div className="w-20 h-20 border-4 border-blue-600 border-t-transparent rounded-full animate-spin absolute top-0"></div>
             </div>
             <div className="text-center">
-              <p className="text-xl font-bold text-slate-800 italic">Dr. Schätz recherchiert live...</p>
-              <p className="text-sm text-slate-400 mt-2">Aktuelle Pollenflug-Daten für Österreich werden analysiert.</p>
+              <p className="text-xl font-bold text-slate-800 italic">Dr. Schätz recherchiert für Ihren Standort...</p>
+              <p className="text-sm text-slate-400 mt-2">Aktuelle Google-Livedaten werden analysiert.</p>
             </div>
           </div>
         )}
@@ -158,7 +169,7 @@ const App: React.FC = () => {
             {/* Summaries */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-gradient-to-br from-blue-50/50 to-white p-8 rounded-3xl border border-blue-100 shadow-sm">
-                <h4 className="text-[10px] font-black text-blue-800 uppercase mb-4 tracking-widest">Lagebericht Heute</h4>
+                <h4 className="text-[10px] font-black text-blue-800 uppercase mb-4 tracking-widest">Aktuelle Einschätzung</h4>
                 <p className="text-lg text-slate-800 font-bold leading-relaxed">{data.summaries?.today_one_liner}</p>
               </div>
               <div className="bg-gradient-to-br from-indigo-50/50 to-white p-8 rounded-3xl border border-indigo-100 shadow-sm">
@@ -203,11 +214,23 @@ const App: React.FC = () => {
               ))}
             </div>
 
-            {/* Footer */}
-            <div className="bg-slate-200/50 p-8 rounded-3xl border border-slate-200 text-center">
-              <p className="text-[10px] text-slate-500 leading-relaxed font-medium">
-                <strong>Haftungsausschluss:</strong> {data.disclaimer || "Die Informationen basieren auf KI-Live-Recherche und dienen der unverbindlichen Information. Bei Symptomen fragen Sie Ihren Arzt."}
-              </p>
+            {/* Minimalist Sources (Plain Text only to comply with instructions) */}
+            <div className="bg-slate-200/50 p-8 rounded-3xl border border-slate-200">
+              {data.groundingSources && data.groundingSources.length > 0 && (
+                <div className="mb-6 opacity-60">
+                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3">Datenquellen (keine Links):</p>
+                  <div className="flex flex-col gap-1">
+                    {data.groundingSources.map((s, i) => (
+                      <span key={i} className="text-[9px] text-slate-500 font-mono break-all">{s.uri}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="pt-2">
+                <p className="text-[10px] text-slate-500 leading-relaxed font-medium">
+                  <strong>Haftungsausschluss:</strong> {data.disclaimer || "Die Informationen basieren auf KI-Live-Recherche und dienen der unverbindlichen Information. Bei Symptomen fragen Sie Ihren Arzt."}
+                </p>
+              </div>
             </div>
           </div>
         )}
@@ -217,7 +240,7 @@ const App: React.FC = () => {
             <div className="text-7xl mb-8 opacity-20">🏥</div>
             <h2 className="text-3xl font-black text-slate-800 mb-4 tracking-tight">Analyse starten</h2>
             <p className="text-slate-500 max-w-sm mx-auto text-lg font-medium leading-relaxed">
-              Bitte geben Sie eine 4-stellige PLZ für Österreich ein.
+              Bitte geben Sie eine 4-stellige PLZ für Österreich ein, um den dermatologischen Lagebericht abzurufen.
             </p>
           </div>
         )}
