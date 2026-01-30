@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { fetchPollenData } from '../services/geminiService';
 import { UIViewModel } from '../types';
 import PollenCharts from './PollenCharts';
@@ -10,6 +10,26 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<UIViewModel | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isKeyAvailable, setIsKeyAvailable] = useState<boolean>(!!process.env.API_KEY);
+
+  useEffect(() => {
+    const checkKey = async () => {
+      if (!process.env.API_KEY && (window as any).aistudio) {
+        const hasKey = await (window as any).aistudio.hasSelectedApiKey();
+        setIsKeyAvailable(hasKey);
+      }
+    };
+    checkKey();
+  }, []);
+
+  const handleConnectKey = async () => {
+    if ((window as any).aistudio) {
+      await (window as any).aistudio.openSelectKey();
+      // Wir nehmen an, dass die Auswahl erfolgreich war und fahren fort
+      setIsKeyAvailable(true);
+      setError(null);
+    }
+  };
 
   const getCoords = (): Promise<{ lat: number; lng: number } | undefined> => {
     return new Promise((resolve) => {
@@ -40,11 +60,12 @@ const App: React.FC = () => {
       setData(result);
     } catch (err: any) {
       console.error("Search Error:", err);
-      // Detaillierte Fehlermeldung für den User
-      if (!process.env.API_KEY) {
-        setError("Konfigurationsfehler: Der API-Key ist im Browser nicht verfügbar. Bitte stellen Sie sicher, dass Sie die App über die vorgesehene Plattform starten.");
+      const msg = err.message || "";
+      if (msg.includes("API_KEY") || msg.includes("API key") || msg.includes("not found") || msg.includes("403")) {
+        setIsKeyAvailable(false);
+        setError("Die API-Verbindung wurde unterbrochen oder der Key ist ungültig.");
       } else {
-        setError(err.message || "Ein technischer Fehler ist aufgetreten.");
+        setError(msg || "Ein technischer Fehler ist aufgetreten.");
       }
     } finally {
       setLoading(false);
@@ -59,6 +80,36 @@ const App: React.FC = () => {
     };
     return styles[severity] || styles.warn;
   };
+
+  if (!isKeyAvailable && !process.env.API_KEY) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
+        <div className="max-w-md w-full bg-white rounded-3xl shadow-xl shadow-slate-200 border border-slate-100 p-10 text-center">
+          <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-bold text-3xl mx-auto mb-6 shadow-lg shadow-blue-200">
+            P
+          </div>
+          <h2 className="text-2xl font-black text-slate-800 mb-4">API-Verbindung erforderlich</h2>
+          <p className="text-slate-500 mb-8 leading-relaxed">
+            Um aktuelle Pollendaten live zu analysieren, muss die App mit Ihrem Google Gemini API-Key verbunden werden.
+          </p>
+          <button 
+            onClick={handleConnectKey}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-2xl transition-all shadow-lg shadow-blue-100 mb-4"
+          >
+            Jetzt verbinden
+          </button>
+          <a 
+            href="https://ai.google.dev/gemini-api/docs/billing" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-xs text-blue-500 hover:underline font-semibold"
+          >
+            Hinweise zur Abrechnung & API Keys
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen pb-12 text-slate-900 bg-slate-50">
@@ -88,7 +139,7 @@ const App: React.FC = () => {
               disabled={loading}
               className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-xl font-bold transition-all shadow-md shadow-blue-100 disabled:opacity-50 active:scale-95"
             >
-              {loading ? 'Suche...' : 'Prüfen'}
+              {loading ? 'Analyse...' : 'Prüfen'}
             </button>
           </form>
         </div>
@@ -112,8 +163,8 @@ const App: React.FC = () => {
               <div className="w-20 h-20 border-4 border-blue-600 border-t-transparent rounded-full animate-spin absolute top-0"></div>
             </div>
             <div className="text-center">
-              <p className="text-xl font-bold text-slate-800 italic">Dr. Schätz recherchiert für Ihren Standort...</p>
-              <p className="text-sm text-slate-400 mt-2">Aktuelle Google-Livedaten werden analysiert.</p>
+              <p className="text-xl font-bold text-slate-800 italic">Dr. Schätz führt eine Live-Recherche durch...</p>
+              <p className="text-sm text-slate-400 mt-2">Aktuelle Google-Livedaten werden für Ihren Standort analysiert.</p>
             </div>
           </div>
         )}
@@ -169,7 +220,7 @@ const App: React.FC = () => {
             {/* Summaries */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-gradient-to-br from-blue-50/50 to-white p-8 rounded-3xl border border-blue-100 shadow-sm">
-                <h4 className="text-[10px] font-black text-blue-800 uppercase mb-4 tracking-widest">Aktuelle Einschätzung</h4>
+                <h4 className="text-[10px] font-black text-blue-800 uppercase mb-4 tracking-widest">Lagebericht Heute</h4>
                 <p className="text-lg text-slate-800 font-bold leading-relaxed">{data.summaries?.today_one_liner}</p>
               </div>
               <div className="bg-gradient-to-br from-indigo-50/50 to-white p-8 rounded-3xl border border-indigo-100 shadow-sm">
@@ -214,11 +265,11 @@ const App: React.FC = () => {
               ))}
             </div>
 
-            {/* Minimalist Sources (Plain Text only to comply with instructions) */}
+            {/* Footer */}
             <div className="bg-slate-200/50 p-8 rounded-3xl border border-slate-200">
               {data.groundingSources && data.groundingSources.length > 0 && (
                 <div className="mb-6 opacity-60">
-                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3">Datenquellen (keine Links):</p>
+                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3">Datenquellen (reiner Text):</p>
                   <div className="flex flex-col gap-1">
                     {data.groundingSources.map((s, i) => (
                       <span key={i} className="text-[9px] text-slate-500 font-mono break-all">{s.uri}</span>
