@@ -28,7 +28,7 @@ function cleanJsonResponse(text: string): string {
 }
 
 export async function fetchPollenData(plz: string, coords?: { lat: number; lng: number }): Promise<UIViewModel> {
-  // Der API_KEY wird hier direkt aus der Umgebung geladen.
+  // Wir erstellen die Instanz erst hier, um den aktuellsten Key aus process.env zu ziehen
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
   
   const locationContext = coords ? ` (Koordinaten: ${coords.lat}, ${coords.lng})` : "";
@@ -203,7 +203,6 @@ export async function fetchPollenData(plz: string, coords?: { lat: number; lng: 
     const cleanedJson = cleanJsonResponse(resultText);
     const parsed = JSON.parse(cleanedJson) as UIViewModel;
     
-    // Wir extrahieren die Quellen, zeigen sie aber nur als Text (keine Hyperlinks)
     const sources: { title: string; uri: string }[] = [];
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
     if (chunks) {
@@ -216,12 +215,15 @@ export async function fetchPollenData(plz: string, coords?: { lat: number; lng: 
         }
       });
     }
-    // Verdoppelte Quellen filtern
     parsed.groundingSources = sources.filter((v, i, a) => a.findIndex(t => t.uri === v.uri) === i);
 
     return parsed;
   } catch (error: any) {
     console.error("Gemini API Error:", error);
+    // Wenn der Fehler auf einen ungültigen Key hinweist, werfen wir eine spezifische Nachricht
+    if (error.message?.includes("API_KEY") || error.status === 403 || error.status === 401) {
+      throw new Error("API_KEY_MISSING");
+    }
     throw error;
   }
 }
