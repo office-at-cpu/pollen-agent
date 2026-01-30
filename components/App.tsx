@@ -11,24 +11,44 @@ const App: React.FC = () => {
   const [data, setData] = useState<UIViewModel | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isKeyAvailable, setIsKeyAvailable] = useState<boolean>(!!process.env.API_KEY);
+  const [connecting, setConnecting] = useState(false);
 
   useEffect(() => {
     const checkKey = async () => {
+      // Wenn der Key nicht im Env ist, prüfen wir das Bridge-Protokoll
       if (!process.env.API_KEY && (window as any).aistudio) {
-        const hasKey = await (window as any).aistudio.hasSelectedApiKey();
-        setIsKeyAvailable(hasKey);
+        try {
+          const hasKey = await (window as any).aistudio.hasSelectedApiKey();
+          setIsKeyAvailable(hasKey);
+        } catch (e) {
+          console.error("Fehler beim Prüfen des API-Keys:", e);
+        }
       }
     };
     checkKey();
   }, []);
 
   const handleConnectKey = async () => {
-    if ((window as any).aistudio) {
-      await (window as any).aistudio.openSelectKey();
-      // Wir nehmen an, dass die Auswahl erfolgreich war und fahren fort
-      setIsKeyAvailable(true);
-      setError(null);
+    setConnecting(true);
+    setError(null);
+    
+    // Prüfen, ob wir uns in einer Umgebung mit AI Studio Bridge befinden
+    const aiStudio = (window as any).aistudio;
+    
+    if (aiStudio) {
+      try {
+        await aiStudio.openSelectKey();
+        // Regel: Nach openSelectKey Erfolg annehmen
+        setIsKeyAvailable(true);
+      } catch (err: any) {
+        setError("Die Verbindung zu Google AI Studio ist fehlgeschlagen.");
+        console.error(err);
+      }
+    } else {
+      // Fallback für Vercel/Standalone: Klare Anweisung statt Schweigen
+      setError("Kein AI Studio Bridge-Protokoll erkannt. Bitte stellen Sie sicher, dass Sie die Umgebungsvariable 'API_KEY' in Ihrem Vercel-Dashboard (Settings > Environment Variables) korrekt gesetzt haben.");
     }
+    setConnecting(false);
   };
 
   const getCoords = (): Promise<{ lat: number; lng: number } | undefined> => {
@@ -60,12 +80,11 @@ const App: React.FC = () => {
       setData(result);
     } catch (err: any) {
       console.error("Search Error:", err);
-      const msg = err.message || "";
-      if (msg.includes("API_KEY") || msg.includes("API key") || msg.includes("not found") || msg.includes("403")) {
+      if (err.message === "API_KEY_MISSING") {
         setIsKeyAvailable(false);
-        setError("Die API-Verbindung wurde unterbrochen oder der Key ist ungültig.");
+        setError("API-Key fehlt. Bitte nutzen Sie den 'Jetzt verbinden' Button oder prüfen Sie Ihre Vercel-Settings.");
       } else {
-        setError(msg || "Ein technischer Fehler ist aufgetreten.");
+        setError(err.message || "Ein technischer Fehler ist aufgetreten.");
       }
     } finally {
       setLoading(false);
@@ -81,31 +100,44 @@ const App: React.FC = () => {
     return styles[severity] || styles.warn;
   };
 
+  // Auth-Screen anzeigen, wenn kein Key da ist
   if (!isKeyAvailable && !process.env.API_KEY) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
-        <div className="max-w-md w-full bg-white rounded-3xl shadow-xl shadow-slate-200 border border-slate-100 p-10 text-center">
+        <div className="max-w-md w-full bg-white rounded-3xl shadow-xl shadow-slate-200 border border-slate-100 p-10 text-center animate-in fade-in zoom-in-95 duration-500">
           <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-bold text-3xl mx-auto mb-6 shadow-lg shadow-blue-200">
             P
           </div>
           <h2 className="text-2xl font-black text-slate-800 mb-4">API-Verbindung erforderlich</h2>
           <p className="text-slate-500 mb-8 leading-relaxed">
-            Um aktuelle Pollendaten live zu analysieren, muss die App mit Ihrem Google Gemini API-Key verbunden werden.
+            Um aktuelle Pollendaten live zu analysieren, benötigt Dr. Schätz Zugriff auf die Google Gemini API.
           </p>
+          
+          {error && (
+            <div className="mb-6 p-4 bg-rose-50 border border-rose-100 rounded-xl text-left">
+              <p className="text-xs text-rose-700 font-medium leading-relaxed">{error}</p>
+            </div>
+          )}
+
           <button 
             onClick={handleConnectKey}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-2xl transition-all shadow-lg shadow-blue-100 mb-4"
+            disabled={connecting}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-2xl transition-all shadow-lg shadow-blue-100 mb-4 disabled:opacity-50 active:scale-95"
           >
-            Jetzt verbinden
+            {connecting ? 'Verbinde...' : 'Jetzt verbinden'}
           </button>
-          <a 
-            href="https://ai.google.dev/gemini-api/docs/billing" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="text-xs text-blue-500 hover:underline font-semibold"
-          >
-            Hinweise zur Abrechnung & API Keys
-          </a>
+          
+          <div className="mt-6 pt-6 border-t border-slate-100">
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-2">Support & Dokumentation</p>
+            <a 
+              href="https://ai.google.dev/gemini-api/docs/billing" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-xs text-blue-500 hover:underline font-semibold"
+            >
+              Google AI Studio API Key Guide
+            </a>
+          </div>
         </div>
       </div>
     );
@@ -164,14 +196,14 @@ const App: React.FC = () => {
             </div>
             <div className="text-center">
               <p className="text-xl font-bold text-slate-800 italic">Dr. Schätz führt eine Live-Recherche durch...</p>
-              <p className="text-sm text-slate-400 mt-2">Aktuelle Google-Livedaten werden für Ihren Standort analysiert.</p>
+              <p className="text-sm text-slate-400 mt-2">Aktuelle Google-Livedaten werden analysiert.</p>
             </div>
           </div>
         )}
 
         {data && !loading && (
           <div className="space-y-8 animate-in fade-in duration-700">
-            {/* Header Result */}
+            {/* ... (Rest der UI bleibt gleich wie im vorherigen UI-Design) ... */}
             <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-8 flex flex-col md:flex-row justify-between gap-6">
               <div>
                 <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-2 block">Dermatologisches Bulletin</span>
@@ -193,7 +225,6 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            {/* KPIs */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {(data.kpi_cards ?? []).map(card => (
                 <div key={card.id} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 hover:border-blue-200 transition-all group overflow-hidden">
@@ -217,7 +248,6 @@ const App: React.FC = () => {
               ))}
             </div>
 
-            {/* Summaries */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-gradient-to-br from-blue-50/50 to-white p-8 rounded-3xl border border-blue-100 shadow-sm">
                 <h4 className="text-[10px] font-black text-blue-800 uppercase mb-4 tracking-widest">Lagebericht Heute</h4>
@@ -229,14 +259,12 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            {/* Charts */}
             <div className="space-y-6">
               {(data.charts ?? []).map(chart => (
                 <PollenCharts key={chart.id} chartData={chart} />
               ))}
             </div>
 
-            {/* Recommendations */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {(data.recommendation_blocks ?? []).map(block => (
                 <div key={block.id} className="p-8 rounded-3xl bg-white border border-slate-100 shadow-sm">
@@ -258,14 +286,12 @@ const App: React.FC = () => {
               ))}
             </div>
 
-            {/* Tables */}
             <div className="space-y-6">
               {(data.tables ?? []).map(table => (
                 <PollenTable key={table.id} tableData={table} />
               ))}
             </div>
 
-            {/* Footer */}
             <div className="bg-slate-200/50 p-8 rounded-3xl border border-slate-200">
               {data.groundingSources && data.groundingSources.length > 0 && (
                 <div className="mb-6 opacity-60">
