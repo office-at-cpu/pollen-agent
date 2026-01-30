@@ -223,7 +223,7 @@ export async function fetchPollenData(plz: string, coords?: { lat: number; lng: 
     return parsed;
   } catch (error: any) {
     console.error("Gemini API Error:", error);
-    if (error.status === 403 || error.status === 401) {
+    if (error.status === 403 || error.status === 401 || error.message?.includes("API key")) {
       throw new Error("API_KEY_MISSING");
     }
     throw error;
