@@ -64,7 +64,7 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen pb-12 text-slate-900 bg-slate-50">
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
+      <header className="bg-white sticky top-0 z-50 shadow-sm border-none">
         <div className="max-w-5xl mx-auto px-4 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-blue-200">
@@ -82,7 +82,7 @@ const App: React.FC = () => {
               placeholder="PLZ"
               value={plz}
               onChange={(e) => setPlz(e.target.value)}
-              className="px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 w-28 text-center text-slate-700 font-bold text-lg"
+              className="px-4 py-2 bg-slate-100 border-none rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 w-28 text-center text-slate-700 font-bold text-lg"
               maxLength={4}
             />
             <button 
@@ -148,7 +148,7 @@ const App: React.FC = () => {
         {data && !loading && (
           <div className="space-y-8 animate-in fade-in duration-700">
             {/* Header Result */}
-            <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-8 flex flex-col md:flex-row justify-between gap-6">
+            <div className="bg-white rounded-3xl shadow-sm border border-slate-50 p-8 flex flex-col md:flex-row justify-between gap-6">
               <div>
                 <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-2 block">Dermatologisches Bulletin</span>
                 <h2 className="text-2xl font-black text-slate-800 leading-tight">
@@ -172,7 +172,7 @@ const App: React.FC = () => {
             {/* KPIs */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {(data.kpi_cards ?? []).map(card => (
-                <div key={card.id} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 hover:border-blue-200 transition-all group overflow-hidden">
+                <div key={card.id} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-50 hover:border-blue-200 transition-all group overflow-hidden">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">{card.title}</p>
                   <p className={`text-2xl font-black mb-4 ${
                     card.severity === 'bad' ? 'text-rose-600' : 
@@ -195,11 +195,11 @@ const App: React.FC = () => {
 
             {/* Summaries */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-gradient-to-br from-blue-50/50 to-white p-8 rounded-3xl border border-blue-100 shadow-sm">
+              <div className="bg-gradient-to-br from-blue-50/50 to-white p-8 rounded-3xl border border-blue-50 shadow-sm">
                 <h4 className="text-[10px] font-black text-blue-800 uppercase mb-4 tracking-widest">Lagebericht Heute</h4>
                 <p className="text-lg text-slate-800 font-bold leading-relaxed">{data.summaries?.today_one_liner}</p>
               </div>
-              <div className="bg-gradient-to-br from-indigo-50/50 to-white p-8 rounded-3xl border border-indigo-100 shadow-sm">
+              <div className="bg-gradient-to-br from-indigo-50/50 to-white p-8 rounded-3xl border border-indigo-50 shadow-sm">
                 <h4 className="text-[10px] font-black text-indigo-800 uppercase mb-4 tracking-widest">Trendprognose</h4>
                 <p className="text-lg text-slate-800 font-bold leading-relaxed">{data.summaries?.next_days_one_liner}</p>
               </div>
@@ -215,7 +215,7 @@ const App: React.FC = () => {
             {/* Recommendations */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {(data.recommendation_blocks ?? []).map(block => (
-                <div key={block.id} className="p-8 rounded-3xl bg-white border border-slate-100 shadow-sm">
+                <div key={block.id} className="p-8 rounded-3xl bg-white border border-slate-50 shadow-sm">
                   <h3 className="text-xl font-black text-slate-800 mb-6">{block.title}</h3>
                   <div className="space-y-6">
                     {(block.items ?? []).map((item, idx) => (
@@ -242,10 +242,10 @@ const App: React.FC = () => {
             </div>
 
             {/* Footer */}
-            <div className="bg-slate-200/50 p-8 rounded-3xl border border-slate-200">
+            <div className="bg-white p-8 rounded-3xl border border-slate-50 shadow-sm">
               {data.groundingSources && data.groundingSources.length > 0 && (
                 <div className="mb-6 opacity-60">
-                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3">Datenquellen (reiner Text):</p>
+                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3">Datenquellen:</p>
                   <div className="flex flex-col gap-1">
                     {data.groundingSources.map((s, i) => (
                       <span key={i} className="text-[9px] text-slate-500 font-mono break-all">{s.uri}</span>
