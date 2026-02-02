@@ -4,18 +4,15 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   define: {
-    // Ersetzt process.env.API_KEY durch den Wert aus der Vercel-Umgebungsvariable
-    'process.env.API_KEY': JSON.stringify(process.env.API_KEY || ''),
-    'process.env': {}
+    // Sicherstellen, dass der API_KEY zur Laufzeit im Browser verfügbar ist
+    'process.env.API_KEY': JSON.stringify(process.env.API_KEY || '')
   },
   build: {
     outDir: 'dist',
     sourcemap: false,
     emptyOutDir: true,
-    rollupOptions: {
-      input: {
-        main: './index.html',
-      },
-    },
   },
+  server: {
+    port: 3000
+  }
 });
