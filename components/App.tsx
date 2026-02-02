@@ -148,7 +148,7 @@ const App: React.FC = () => {
         {data && !loading && (
           <div className="space-y-8 animate-in fade-in duration-700">
             {/* Header Result */}
-            <div className="bg-white rounded-3xl shadow-sm border border-slate-50 p-8 flex flex-col md:flex-row justify-between gap-6">
+            <div className="bg-white rounded-3xl shadow-sm border-none p-8 flex flex-col md:flex-row justify-between gap-6">
               <div>
                 <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-2 block">Dermatologisches Bulletin</span>
                 <h2 className="text-2xl font-black text-slate-800 leading-tight">
@@ -172,7 +172,7 @@ const App: React.FC = () => {
             {/* KPIs */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {(data.kpi_cards ?? []).map(card => (
-                <div key={card.id} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-50 hover:border-blue-200 transition-all group overflow-hidden">
+                <div key={card.id} className="bg-white p-6 rounded-3xl shadow-sm border-none hover:ring-2 hover:ring-blue-100 transition-all group overflow-hidden">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">{card.title}</p>
                   <p className={`text-2xl font-black mb-4 ${
                     card.severity === 'bad' ? 'text-rose-600' : 
@@ -195,11 +195,11 @@ const App: React.FC = () => {
 
             {/* Summaries */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-gradient-to-br from-blue-50/50 to-white p-8 rounded-3xl border border-blue-50 shadow-sm">
+              <div className="bg-gradient-to-br from-blue-50/50 to-white p-8 rounded-3xl border-none shadow-sm">
                 <h4 className="text-[10px] font-black text-blue-800 uppercase mb-4 tracking-widest">Lagebericht Heute</h4>
                 <p className="text-lg text-slate-800 font-bold leading-relaxed">{data.summaries?.today_one_liner}</p>
               </div>
-              <div className="bg-gradient-to-br from-indigo-50/50 to-white p-8 rounded-3xl border border-indigo-50 shadow-sm">
+              <div className="bg-gradient-to-br from-indigo-50/50 to-white p-8 rounded-3xl border-none shadow-sm">
                 <h4 className="text-[10px] font-black text-indigo-800 uppercase mb-4 tracking-widest">Trendprognose</h4>
                 <p className="text-lg text-slate-800 font-bold leading-relaxed">{data.summaries?.next_days_one_liner}</p>
               </div>
@@ -215,7 +215,7 @@ const App: React.FC = () => {
             {/* Recommendations */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {(data.recommendation_blocks ?? []).map(block => (
-                <div key={block.id} className="p-8 rounded-3xl bg-white border border-slate-50 shadow-sm">
+                <div key={block.id} className="p-8 rounded-3xl bg-white border-none shadow-sm">
                   <h3 className="text-xl font-black text-slate-800 mb-6">{block.title}</h3>
                   <div className="space-y-6">
                     {(block.items ?? []).map((item, idx) => (
@@ -242,7 +242,7 @@ const App: React.FC = () => {
             </div>
 
             {/* Footer */}
-            <div className="bg-white p-8 rounded-3xl border border-slate-50 shadow-sm">
+            <div className="bg-white p-8 rounded-3xl border-none shadow-sm">
               {data.groundingSources && data.groundingSources.length > 0 && (
                 <div className="mb-6 opacity-60">
                   <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3">Datenquellen:</p>
