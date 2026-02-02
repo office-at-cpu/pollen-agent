@@ -27,8 +27,8 @@ function cleanJsonResponse(text: string): string {
 }
 
 export async function fetchPollenData(plz: string, coords?: { lat: number; lng: number }): Promise<UIViewModel> {
-  // Der API_KEY wird von Vite via define injiziert
-  const apiKey = process.env.API_KEY;
+  // Zugriff auf den injizierten API_KEY
+  const apiKey = (process.env as any).API_KEY;
   
   if (!apiKey) {
     throw new Error("API_KEY_MISSING");
