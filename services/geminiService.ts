@@ -1,17 +1,5 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { UIViewModel } from "../types";
-
-// Deklaration für den TS-Compiler
-declare global {
-  interface Window {
-    process?: {
-      env: {
-        API_KEY?: string;
-      };
-    };
-  }
-}
 
 const SYSTEM_INSTRUCTION = `
 Rolle: "Polleninformation-Agent Dr. Schätz" (Dermatologische Praxis Österreich).
@@ -39,8 +27,8 @@ function cleanJsonResponse(text: string): string {
 }
 
 export async function fetchPollenData(plz: string, coords?: { lat: number; lng: number }): Promise<UIViewModel> {
-  // Sicherer Zugriff auf den API-Key aus der Umgebung
-  const apiKey = (typeof process !== 'undefined' && process.env?.API_KEY) || "";
+  // Der API_KEY wird von Vite via define injiziert
+  const apiKey = process.env.API_KEY;
   
   if (!apiKey) {
     throw new Error("API_KEY_MISSING");
