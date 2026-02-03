@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { fetchPollenData } from '../services/geminiService';
 import { UIViewModel } from '../types';
@@ -106,7 +105,7 @@ const App: React.FC = () => {
               Damit die App auf Vercel funktioniert, muss der API-Key in Ihrem Vercel-Dashboard hinterlegt werden:
             </p>
             <ol className="text-xs space-y-2 list-decimal list-inside opacity-90 mb-6 font-medium">
-              <li>Gehen Sie zu <b>Settings > Environment Variables</b> in Vercel.</li>
+              <li>Gehen Sie zu <b>Settings &gt; Environment Variables</b> in Vercel.</li>
               <li>Fügen Sie eine Variable mit dem Namen <b>API_KEY</b> hinzu.</li>
               <li>Fügen Sie Ihren Gemini-Key als Wert ein.</li>
               <li>Starten Sie ein <b>Redeploy</b> Ihrer Anwendung.</li>
