@@ -3,7 +3,7 @@ import { UIViewModel } from "../types";
 
 const SYSTEM_INSTRUCTION = `
 Rolle: "Polleninformation-Agent Dr. Schätz" (Dermatologische Praxis Österreich).
-Auftrag: Erstelle ein medizinisches Bulletin zur Pollenlage basierend auf einer PLZ und optionalen Koordinaten.
+Auftrag: Erstelle ein medizinisches Bulletin zur Pollenlage basierend auf einer PLZ.
 Format: Ausschließlich valides JSON.
 
 STRIKTES VERBOT VON FORMATIERUNG:
@@ -26,8 +26,7 @@ function cleanJsonResponse(text: string): string {
   return text.trim();
 }
 
-export async function fetchPollenData(plz: string, coords?: { lat: number; lng: number }): Promise<UIViewModel> {
-  // Zugriff auf den injizierten API_KEY via process.env.API_KEY (durch Vite define ersetzt)
+export async function fetchPollenData(plz: string): Promise<UIViewModel> {
   const apiKey = process.env.API_KEY;
   
   if (!apiKey) {
@@ -35,12 +34,11 @@ export async function fetchPollenData(plz: string, coords?: { lat: number; lng: 
   }
 
   const ai = new GoogleGenAI({ apiKey });
-  const locationContext = coords ? ` (Koordinaten: ${coords.lat}, ${coords.lng})` : "";
   
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Analysiere die aktuelle Pollenbelastung für PLZ ${plz} in Österreich${locationContext}. Liefere das Ergebnis als JSON.`,
+      contents: `Analysiere die aktuelle Pollenbelastung für die PLZ ${plz} in Österreich. Liefere das Ergebnis als JSON.`,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
         tools: [{ googleSearch: {} }],
@@ -207,20 +205,6 @@ export async function fetchPollenData(plz: string, coords?: { lat: number; lng: 
     const cleanedJson = cleanJsonResponse(resultText);
     const parsed = JSON.parse(cleanedJson) as UIViewModel;
     
-    const sources: { title: string; uri: string }[] = [];
-    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-    if (chunks) {
-      chunks.forEach((chunk: any) => {
-        if (chunk.web && chunk.web.uri) {
-          sources.push({
-            title: chunk.web.title || chunk.web.uri,
-            uri: chunk.web.uri
-          });
-        }
-      });
-    }
-    parsed.groundingSources = sources.filter((v, i, a) => a.findIndex(t => t.uri === v.uri) === i);
-
     return parsed;
   } catch (error: any) {
     console.error("Gemini API Error:", error);
