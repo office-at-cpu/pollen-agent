@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { fetchPollenData } from '../services/geminiService';
 import { UIViewModel } from '../types';
 import PollenCharts from './PollenCharts';
@@ -10,17 +10,6 @@ const App: React.FC = () => {
   const [data, setData] = useState<UIViewModel | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isVercelMissingKey, setIsVercelMissingKey] = useState(false);
-
-  const getCoords = (): Promise<{ lat: number; lng: number } | undefined> => {
-    return new Promise((resolve) => {
-      if (!navigator.geolocation) return resolve(undefined);
-      navigator.geolocation.getCurrentPosition(
-        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        () => resolve(undefined),
-        { timeout: 5000 }
-      );
-    });
-  };
 
   const handleSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -36,8 +25,7 @@ const App: React.FC = () => {
     setIsVercelMissingKey(false);
 
     try {
-      const coords = await getCoords();
-      const result = await fetchPollenData(plz, coords);
+      const result = await fetchPollenData(plz);
       setData(result);
     } catch (err: any) {
       console.error("Search Error:", err);
@@ -139,7 +127,7 @@ const App: React.FC = () => {
             </div>
             <div className="text-center">
               <p className="text-xl font-bold text-slate-800 italic">Dr. Schätz führt eine Live-Recherche durch...</p>
-              <p className="text-sm text-slate-400 mt-2">Aktuelle Datenquellen werden für Ihren Standort ausgewertet.</p>
+              <p className="text-sm text-slate-400 mt-2">Aktuelle Datenquellen für PLZ {plz} werden ausgewertet.</p>
             </div>
           </div>
         )}
@@ -242,16 +230,6 @@ const App: React.FC = () => {
 
             {/* Footer */}
             <div className="bg-white p-8 rounded-3xl border-none shadow-sm">
-              {data.groundingSources && data.groundingSources.length > 0 && (
-                <div className="mb-6 opacity-60">
-                  <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3">Datenquellen:</p>
-                  <div className="flex flex-col gap-1">
-                    {data.groundingSources.map((s, i) => (
-                      <span key={i} className="text-[9px] text-slate-500 font-mono break-all">{s.uri}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
               <div className="pt-2">
                 <p className="text-[10px] text-slate-500 leading-relaxed font-medium">
                   <strong>Haftungsausschluss:</strong> {data.disclaimer || "Die Informationen basieren auf KI-Live-Recherche und dienen der unverbindlichen Information. Bei Symptomen fragen Sie Ihren Arzt."}
