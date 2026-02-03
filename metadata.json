@@ -1,7 +1,5 @@
 {
   "name": "Polleninformation Dr. Schätz",
   "description": "Ein datengetriebener Polleninformations-Agent für Patienten in Österreich, der aktuelle Belastungen, Prognosen und Verhaltensempfehlungen basierend auf der Postleitzahl liefert.",
-  "requestFramePermissions": [
-    "geolocation"
-  ]
+  "requestFramePermissions": []
 }
